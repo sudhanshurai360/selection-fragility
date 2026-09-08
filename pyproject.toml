@@ -1,0 +1,88 @@
+[build-system]
+# FLOOR RAISED 2026-09-07 (round-4 8-lens PyPI-preflight audit): 69.5.0 is the first setuptools
+# release supporting the SPDX `license = "MIT"` string form below (PEP 639) -- was >=61.0, which
+# predates that support and would fail to build this file's `license`/classifier combination
+# correctly on an old, unpinned setuptools.
+requires = ["setuptools>=69.5.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "selection-fragility"
+version = "1.0.0"
+description = "Decision breakdown point (k*) and ranking-fragility diagnostics for forecast model selection"
+readme = "README.md"
+requires-python = ">=3.10"
+# CORRECTED 2026-09-07 (round-4 8-lens PyPI-preflight audit, CONFIRMED MEDIUM): was
+# `license = { file = "LICENSE" }` plus the "License :: OSI Approved :: MIT License" classifier
+# below -- both forms are deprecated under PEP 639 (setuptools warns on every build: "License
+# classifiers are deprecated" / "`project.license` as a TOML table is deprecated", removal
+# scheduled 2027-02-18). The SPDX string form is the current, non-deprecated way to declare the
+# same license; the LICENSE file itself is unchanged and still ships (via `license-files`'s
+# setuptools default, confirmed present in the built wheel's dist-info/licenses/LICENSE).
+license = "MIT"
+authors = [{ name = "Sudhanshu Rai" }]
+keywords = ["forecasting", "model-selection", "model-confidence-set", "robustness", "breakdown-point", "evaluation"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Operating System :: OS Independent",
+]
+# arch pin TIGHTENED 2026-08-16 (independent review): the previously-open "arch>=6" permits arch==7.0.0,
+# which was verified directly to fail to IMPORT at all against pandas>=3 (a real arch<->pandas API
+# mismatch, "deprecate_kwarg() missing 1 required positional argument", not hypothetical). arch==8.0.0 is
+# the version this package is actually developed and tested against; pin to that until a wider range is
+# verified.
+# requires-python CORRECTED 2026-08-26 (round-2 review): this previously claimed ">=3.9" but a clean
+# Python 3.9.6 venv install fails outright, because arch==8.0.0 (the pinned floor above) ships no wheel
+# for Python <3.10 (confirmed against PyPI's own per-release requires_python metadata). arch==7.1.0/7.2.0
+# DO declare 3.9 support, but this package cannot verify they also carry the arch==7.0.0->8.0.0
+# pandas-compat fix noted above without a real Python 3.9 interpreter, which was not available to test
+# with here (Homebrew's python@3.9 is upstream-deprecated, disabling 2026-10-15) -- claiming 3.9 support
+# on an unverified guess would repeat the exact "claim not backed by a real run" defect this round is
+# fixing elsewhere. Floor raised to >=3.10 to match what is actually installed and tested.
+# Floors bumped 2026-08-27 (round-5 reproducibility audit): the old floors (numpy>=1.20,
+# pandas>=1.3, scipy>=1.7) predate this package's own requires-python>=3.10 floor and have no
+# wheel for the newest Python this package supports (3.13) -- pinning to them for testing/exact
+# reproduction fails to build from source on 3.13 (Cython/meson build failures against newer
+# toolchains), even though pip's normal resolver silently skips them in practice. Bumped to the
+# earliest version of each with wheels on BOTH cp310 (oldest supported) and cp313 (newest), per
+# PyPI's published wheel metadata, and verified: installs cleanly together, and the full test
+# suite (pytest tests/) passes unchanged pinned at exactly these three floor versions.
+dependencies = ["numpy>=2.1.0", "pandas>=2.2.3", "arch>=8,<9", "scipy>=1.14.1"]
+
+[project.optional-dependencies]
+# tomli: only needed on Python <3.11, where the stdlib tomllib doesn't exist yet (test_packaging.py
+# falls back to it). Round 7/8 (2026-08-27): the first real Python-3.10 CI run failed with
+# ModuleNotFoundError: No module named 'tomllib' -- this was never caught locally since the one
+# dev machine used for every prior round only ever ran Python 3.13.
+test = ["pytest>=7.0", "hypothesis>=6.0", "tomli; python_version<'3.11'"]
+
+[project.urls]
+Homepage = "https://github.com/sudhanshurai360/selection-fragility"
+Repository = "https://github.com/sudhanshurai360/selection-fragility"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# NOTE (name, RESOLVED 2026-07-26): `kstar` is TAKEN on PyPI — Naegle Lab's "KSTAR: Kinase-Substrate Transfer to
+# Activity Relationships" (v1.2.0), itself a Python package whose wheel owns the top-level `kstar/` import directory.
+# So the earlier suggestion here — "the import name can stay `kstar` regardless of the PyPI name" — was WRONG and is
+# retracted: two distributions writing the same top-level package means pip silently overwrites files in any
+# environment holding both. Distribution and import are therefore BOTH `selection[-_]fragility`. The coined object k*
+# is preserved where it is actually read: the `k_star` output field and the `decision_breakdown()` entry point.
+# Re-confirm the name is still unclaimed immediately before `twine upload`.
+
+[tool.pytest.ini_options]
+# ROUND-7 FIX (2026-08-27, hollow-test-hunter finding): no xfail_strict setting anywhere meant the
+# suite's one documented known-gap xfail (test_negative_scale_raises, decision_breakdown silently
+# flips "lower is better" on negative-scale input with no validation) provided no forcing signal --
+# if it were ever accidentally fixed as a side effect of unrelated work, nobody would be alerted via
+# a red/green change; it would just silently start passing. Verified before adding: the one existing
+# xfail genuinely still fails (confirmed via `pytest -v`), so this doesn't turn a false pass into a
+# reported failure.
+xfail_strict = true

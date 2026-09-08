@@ -1,0 +1,94 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the accompanying paper."
+title: "selection-fragility: the decision breakdown point (k*) and ranking-fragility diagnostics for forecast model selection"
+abstract: >-
+  Decision-oriented diagnostics for forecast model selection: the Model Confidence Set
+  (which candidate models are statistically indistinguishable from the best), the decision
+  breakdown point k* (the fewest evaluation periods whose deletion flips the pooled winner),
+  a resolution report answering whether the observed edge is actually resolvable at the
+  available sample size (with a refusal discipline for reads the data cannot support), a
+  zero-simulation significance certificate for k*, run-over-run champion-change comparison,
+  and selection-as-election diagnostics including score, plurality and Condorcet winners,
+  genuine intransitive cycles versus pairwise ties, margin concentration, and a
+  block-bootstrap winner-stability null.
+type: software
+authors:
+  - family-names: Rai
+    given-names: Sudhanshu
+    orcid: "https://orcid.org/0009-0001-2447-0336"
+    affiliation: "Independent Researcher"
+    email: me@sudhanshurai.org
+# CONFIRMED REGRESSION (personal full-file review, 2026-08-17): this file previously asserted
+# `date-released: "2026-07-26"` for version 1.0.0, directly contradicted by this same repo's own
+# CHANGELOG.md header ("## [1.0.0] -- unreleased") -- the release genuinely has not happened (bugs
+# were still being found and fixed the day this comment was written). Same premature-fact risk the
+# DOI comment below already correctly avoids; omit until the actual release date is known, add it
+# then rather than guess or backdate.
+version: 1.0.0
+license: MIT
+repository-code: "https://github.com/sudhanshurai360/selection-fragility"
+keywords:
+  - forecasting
+  - model selection
+  - model confidence set
+  - robustness
+  - breakdown point
+  - computational social choice
+  - real-time data
+  - official statistics
+  - reproducibility
+
+# There is deliberately NO `doi:` field and NO `identifiers:` block here yet. Zenodo mints
+# both a concept DOI and a version DOI on first deposit; adding a placeholder or pairing this
+# version with a DOI minted for a different one would be published as fact by any CFF consumer
+# (consumers strip comments, so a comment cannot carry the caveat). Add the VERSION DOI here
+# only after the deposit exists.
+
+preferred-citation:
+  type: unpublished
+  title: >-
+    The Decision Breakdown Point: How Fragile Is "The Best Forecasting Model," and What Does
+    That Fragility Cost?
+  authors:
+    - family-names: Rai
+      given-names: Sudhanshu
+      orcid: "https://orcid.org/0009-0001-2447-0336"
+      affiliation: "Independent Researcher"
+  year: 2026
+
+# Closest prior art -- see README.md's "Related work" section for the full, precise relationship
+# (k* is exact on AMIP's linear-functional case; the non-reducible contribution is the calibrated
+# null AMIP lacks, transported to a model-selection decision on dependent, vintaged data).
+references:
+  - type: article
+    title: >-
+      An automatic finite-sample robustness metric: when can dropping a little data change
+      conclusions? Part I: definitions and experiments
+    authors:
+      - family-names: Giordano
+        given-names: Ryan
+      - family-names: Meager
+        given-names: Rachael
+      - family-names: Broderick
+        given-names: Tamara
+    journal: "Philosophical Transactions of the Royal Society A"
+    volume: "384"
+    issue: "2321"
+    year: 2026
+    notes: "Preprint: arXiv:2011.14999 (2020). AMIP -- the closest prior art to k*."
+  - type: generic
+    title: >-
+      Dropping Just a Handful of Preferences Can Change Top Large Language Model Rankings
+    authors:
+      - family-names: Huang
+        given-names: "Jenny Y."
+      - family-names: Shen
+        given-names: Yunyi
+      - family-names: Wei
+        given-names: Dennis
+      - family-names: Broderick
+        given-names: Tamara
+    year: 2025
+    notes: >-
+      arXiv:2508.11847. Drop-to-flip applied to Bradley-Terry LLM preference rankings; a related,
+      non-competing instance in a different domain -- see README.md.

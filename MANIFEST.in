@@ -1,0 +1,36 @@
+# ADDED 2026-08-29 (11-angle review finding): README.md points readers at EVALUATION_CARD.md,
+# CITATION.cff, and CONTRIBUTING.md, but none of the three were included in a built sdist/wheel --
+# confirmed via `python -m build --sdist` before this file existed (setuptools' default sdist file
+# set does not include arbitrary root-level docs beyond what packages.find picks up). Declared here
+# explicitly rather than left implicit, so an install from PyPI actually has what the README promises.
+include README.md
+include LICENSE
+include CHANGELOG.md
+include EVALUATION_CARD.md
+include CITATION.cff
+include CONTRIBUTING.md
+# ADDED 2026-09-07 (round-4 8-lens PyPI-preflight audit, CONFIRMED HIGH): two more real gaps in the
+# same class as the finding above -- confirmed by actually building the sdist and checking its real
+# contents, not by inspecting this file in isolation.
+# (1) requirements-lock.txt: EVALUATION_CARD.md's own Reproducibility section tells a reader "pins
+#     the exact dependency versions the suite was verified against", but the file was never declared
+#     here and setuptools' default sdist file set doesn't pick up an arbitrary root-level .txt file
+#     -- so it silently never shipped, contradicting the doc that points at it.
+# (2) tests/*.py (esp. conftest.py): CONTRIBUTING.md instructs `pip install -e ".[test]"` then
+#     `pytest tests/` -- but setuptools' legacy default sdist file discovery only auto-includes
+#     files matching the `test*.py` glob, which does NOT match `conftest.py`. Confirmed directly:
+#     building the sdist and running the real suite against the unpacked copy gave "140 errors,
+#     fixture 'random_panel' not found" -- every fixture-dependent test failed, not just some.
+#     recursive-include (not a single `include tests/conftest.py`) so ANY test file added later is
+#     covered by construction, not by remembering to update this list again.
+include requirements-lock.txt
+recursive-include tests *.py
+include tests/README.md
+# (3) .github/workflows/: added the same day as this note, a repo-root-adapted CI workflow for when
+#     this directory becomes its own standalone repo (see that file's own header comment). Confirmed
+#     by the SAME build-and-check discipline as (1)/(2): setuptools' default sdist file set does not
+#     include dotfiles/dot-directories at all, so without this line the workflow silently never
+#     shipped either, and EVALUATION_CARD.md's freshly-corrected reference to it would have become a
+#     second dead link the moment a real sdist was built -- caught here before that could happen by
+#     actually rebuilding and re-checking, not assumed fixed after the first pass.
+recursive-include .github *.yml *.yaml *.md

@@ -1,0 +1,20 @@
+# Known-good, exactly-reproducible reference environment for selection-fragility.
+#
+# NOT a hard install requirement -- pyproject.toml's flexible ranges are the actual install spec,
+# and this package is tested against a range of versions (round-5 reproducibility audit confirmed
+# byte-identical output across two independently-installed numpy/pandas/scipy version sets, plus
+# the full 293+ test suite passing unchanged pinned at pyproject.toml's floor versions). This file
+# is a documented reference point: the EXACT versions the full test suite was verified against on
+# 2026-08-27, for anyone who wants a guaranteed-reproducible environment rather than "should work"
+# across the flexible range. Install with `pip install -r requirements-lock.txt -e .` for an
+# environment matching this reference point precisely.
+#
+# Python: 3.13.15 (also verified: pyproject.toml's floor versions -- numpy==2.1.0, pandas==2.2.3,
+# scipy==1.14.1, arch==8.0.0 -- install cleanly together and pass the full suite unchanged; wheels
+# for those floors exist on cp310, the oldest Python this package declares support for, per PyPI's
+# published wheel metadata, though not independently installed/run here -- no 3.10 interpreter was
+# available in the environment this lock file was generated from).
+numpy==2.4.4
+pandas==2.3.3
+scipy==1.17.1
+arch==8.0.0

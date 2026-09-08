@@ -1,0 +1,46 @@
+name: selection-fragility test
+
+# ADDED 2026-09-07 (round-4 8-lens PyPI-preflight audit, CONFIRMED HIGH). This is the STANDALONE-REPO
+# copy of the CI matrix -- a real gap the audit found: the only version of this workflow that
+# actually runs today lives at the PRIVATE monorepo's own root
+# (Paper3_UIClaims_Forecasting/.github/workflows/selection-fragility-test.yml, moved there
+# 2026-08-27 because GitHub only discovers workflow files at <repo-root>/.github/workflows/, and
+# this package's directory is a SUBDIRECTORY of that monorepo, not its own repo -- see that file's
+# own comment for the full story). But `release/selection-fragility/` is also meant to become its
+# OWN standalone public repo (pyproject.toml's Homepage/Repository point at
+# github.com/sudhanshurai360/selection-fragility) -- and in THAT repo, this directory IS the repo
+# root, so the monorepo's own workflow (with its release/selection-fragility/-scoped `paths:` filter
+# and `working-directory:` default) would never trigger and would fail immediately even if it did.
+# No automated staging script was found anywhere in the monorepo to copy/adapt the workflow when
+# release/selection-fragility/ gets pushed out standalone -- committing this pre-adapted copy here,
+# in the exact location GitHub will scan once this directory becomes a repo root, closes that gap
+# without needing to build that automation. EVALUATION_CARD.md's own CI-matrix reference was
+# corrected to point at this file (a plain repo-root-relative path, not the monorepo's `../../`).
+#
+# DIFFERENCES FROM THE MONOREPO COPY, BOTH INTENTIONAL: no `paths:` filter (this whole repo IS the
+# package once standalone, so every push is in scope -- the monorepo's filter existed only to avoid
+# running this job on unrelated changes elsewhere in a much bigger repo); no
+# `working-directory: release/selection-fragility` default (the checkout root is already the
+# package root here). The matrix/install/test steps themselves are unchanged and should be kept in
+# sync with the monorepo copy by hand until real staging automation exists.
+
+on:
+  push: {}
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  install-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[test]"
+      - run: pytest tests/ -v
