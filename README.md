@@ -411,8 +411,8 @@ produced a particular result; the concept DOI always resolves to the latest rele
 ## Contributing and getting help
 
 See `CONTRIBUTING.md` for how to run the tests, known code patterns worth knowing before you touch related code,
-and how to report a bug (`.github/ISSUE_TEMPLATE/`, at the repository root). This is currently a private
-repository — once it's public, GitHub Issues is the primary support channel.
+and how to report a bug (`.github/ISSUE_TEMPLATE/`, at the repository root). GitHub Issues is the primary
+support channel.
 
 ## License
 

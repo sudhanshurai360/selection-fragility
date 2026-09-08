@@ -24,6 +24,9 @@ authors:
 # were still being found and fixed the day this comment was written). Same premature-fact risk the
 # DOI comment below already correctly avoids; omit until the actual release date is known, add it
 # then rather than guess or backdate.
+# ADDED 2026-09-08: the release happened -- GitHub release v1.0.0 published, Zenodo deposit
+# confirmed live at the DOI below (fetched directly, not assumed from the GitHub-Zenodo widget).
+date-released: "2026-09-08"
 version: 1.0.0
 license: MIT
 repository-code: "https://github.com/sudhanshurai360/selection-fragility"
@@ -38,11 +41,16 @@ keywords:
   - official statistics
   - reproducibility
 
-# There is deliberately NO `doi:` field and NO `identifiers:` block here yet. Zenodo mints
-# both a concept DOI and a version DOI on first deposit; adding a placeholder or pairing this
-# version with a DOI minted for a different one would be published as fact by any CFF consumer
-# (consumers strip comments, so a comment cannot carry the caveat). Add the VERSION DOI here
-# only after the deposit exists.
+# ADDED 2026-09-08: the version DOI below was read directly from the live Zenodo record
+# (zenodo.org/records/22652327), not copied from the GitHub-Zenodo integration widget or assumed.
+# That record does not yet surface a separate "concept DOI" (the one that always resolves to the
+# latest version) -- Zenodo generally only makes that distinction visible in the UI once a second
+# version exists. This is deliberately the VERSION-specific DOI, paired with version: 1.0.0 above;
+# revisit when a v1.1.0/v2.0.0 deposit exists and the concept DOI becomes unambiguous.
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22652327
+    description: "The version-specific DOI for v1.0.0, minted by Zenodo on GitHub release."
 
 preferred-citation:
   type: unpublished
