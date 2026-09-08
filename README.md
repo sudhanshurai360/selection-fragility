@@ -402,8 +402,8 @@ the source repo, not the installed package itself) — a plain `pip install sele
 local copy of either. Read them at the package's
 [GitHub repository](https://github.com/sudhanshurai360/selection-fragility) instead of expecting a local file.
 
-Rai, S. (2026). *The Decision Breakdown Point: How Fragile Is "The Best Forecasting Model," and What Does That
-Fragility Cost?* [DOI pending — see `CITATION.cff`.]
+The accompanying paper is still unpublished (in journal review); its citation will be added here once it has a
+stable, citable reference.
 
 When citing the software, use the **version** DOI rather than the concept DOI if you are recording which snapshot
 produced a particular result; the concept DOI always resolves to the latest release.

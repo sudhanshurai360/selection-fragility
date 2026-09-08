@@ -5,8 +5,8 @@ All notable changes to `selection-fragility` are recorded here. Versions follow
 
 ## [1.0.0] — unreleased
 
-First public release, accompanying the paper *The Decision Breakdown Point: How Fragile Is "The Best Forecasting
-Model," and What Does That Fragility Cost?*
+First public release, accompanying an unpublished companion paper (in journal review) applying the same
+diagnostic to real official-statistics forecasting panels.
 
 ### Added — the v1.0 diagnostic surface (`LossPanel`, identification, resolution, pivot, compare, report)
 

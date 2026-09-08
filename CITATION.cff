@@ -52,17 +52,11 @@ identifiers:
     value: 10.5281/zenodo.22652327
     description: "The version-specific DOI for v1.0.0, minted by Zenodo on GitHub release."
 
-preferred-citation:
-  type: unpublished
-  title: >-
-    The Decision Breakdown Point: How Fragile Is "The Best Forecasting Model," and What Does
-    That Fragility Cost?
-  authors:
-    - family-names: Rai
-      given-names: Sudhanshu
-      orcid: "https://orcid.org/0009-0001-2447-0336"
-      affiliation: "Independent Researcher"
-  year: 2026
+# The accompanying paper is still unpublished (in journal review); no preferred-citation block
+# for it yet -- adding a title/author/year block here would make GitHub's own "Cite this
+# repository" button render the paper's exact title paired with the author's name, which is
+# exactly the kind of citable, one-click identity link that shouldn't exist while the manuscript
+# is under double-blind review. Add this block once the paper has a stable, citable reference.
 
 # Closest prior art -- see README.md's "Related work" section for the full, precise relationship
 # (k* is exact on AMIP's linear-functional case; the non-reducible contribution is the calibrated
