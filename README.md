@@ -68,7 +68,7 @@ This prints a one-screen VERDICT (is the winner identified — the Model Confide
 (mean loss, in-MCS, periods won), RESOLUTION (observed edge vs. the minimum detectable edge at this
 sample size, an MCB bound), and PIVOT (k\*, the responsible period(s), `concentration_share`). This
 is the recommended entry point — see [Staged v1.0 API](#staged-v10-api-recommended) below for the
-functions behind each section, and **Legacy API** for the lower-level `fragility()`/
+functions behind each section, and **Core API** for the lower-level `fragility()`/
 `model_confidence_set()` diagnostics `report()` is built on.
 
 ### Staged v1.0 API (recommended)
@@ -104,15 +104,18 @@ wide = df_long.pivot_table(index=["unique_id", "ds", "cutoff", "y"], columns="mo
 panel = LossPanel.from_forecasts(wide, y_true="y", period="cutoff", group="unique_id")
 ```
 
-### Legacy API
+### Core API
 
 `fragility`, `decision_breakdown`, `breakdown_number`, `winner_stability`, `exchangeable_benchmark`,
 `surprise_concentration`, `pooled_winner`, `per_period_winner`, `condorcet_winner`/`condorcet_status`,
-`mcs`/`model_confidence_set` are the original, lower-level diagnostics `report()` is built on top of.
-They remain public because `fragility()` is still the most direct way to get `k_star`,
-`concentration`, `condorcet_status`, and per-period winners in one call — **except its `fragile`
-field**, which is retired (see the field table below); use `resolution_report()`/`report()` for a
-fragility verdict instead.
+`mcs`/`model_confidence_set` are the original, lower-level diagnostics `report()` is built on top
+of — not deprecated, just closer to the metal. They are the same functions the accompanying paper's
+own results are computed from, so they matter beyond convenience: anyone checking a published
+number against the code wants `k_star`/`winner_stability`/`condorcet_status` in this raw form, not
+filtered through `LossPanel`'s validation. They remain public because `fragility()` is still the
+most direct way to get `k_star`, `concentration`, `condorcet_status`, and per-period winners in one
+call — **except its `fragile` field**, which is retired (see the field table below); use
+`resolution_report()`/`report()` for a fragility verdict instead.
 
 **`surprise_concentration(L, labels=None)`** answers a different question from everything else in
 this package: not "is the champion's win fragile," but "*why* would it be, if it is" — is the
@@ -152,7 +155,7 @@ python -m selection_fragility compare previous.json current.json [--alpha 0.10] 
 
 ## Interpreting the output
 
-Fields returned by the **legacy** `fragility()` call (see [Legacy API](#legacy-api) above). For the
+Fields returned by the `fragility()` call (see [Core API](#core-api) above). For the
 recommended `report()` entry point, the VERDICT/LEADERBOARD/RESOLUTION/PIVOT sections it prints are
 documented inline in `report()`'s own docstring.
 

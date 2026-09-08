@@ -187,9 +187,9 @@ def per_period_winner(L: dict, return_ties=False):
     (winner, all_tied) and report the honest range.
 
     Accepts a `LossPanel` directly, matching `pooled_winner`/`decision_breakdown`/`winner_stability`
-    (FIXED 2026-09-07, round-4 8-lens PyPI-preflight audit: this and its two "Legacy API" siblings
+    (FIXED 2026-09-07, round-4 8-lens PyPI-preflight audit: this and its two "Core API" siblings
     below, condorcet_winner/condorcet_status, raised a raw internal TypeError on a LossPanel despite
-    sitting in the same README "Legacy API" sentence as three functions that already accepted one --
+    sitting in the same README "Core API" sentence as three functions that already accepted one --
     an inconsistency within the documented API surface, not just the Stage-0/Stage-1 bug this audit
     originally targeted in identify.py)."""
     L, _ = _unwrap_panel(L, None)

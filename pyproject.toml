@@ -63,6 +63,7 @@ dependencies = ["numpy>=2.1.0", "pandas>=2.2.3", "arch>=8,<9", "scipy>=1.14.1"]
 test = ["pytest>=7.0", "hypothesis>=6.0", "tomli; python_version<'3.11'"]
 
 [project.urls]
+# Repo created and pushed 2026-09-07: github.com/sudhanshurai360/selection-fragility (public).
 Homepage = "https://github.com/sudhanshurai360/selection-fragility"
 Repository = "https://github.com/sudhanshurai360/selection-fragility"
 

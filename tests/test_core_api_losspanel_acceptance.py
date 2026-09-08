@@ -1,12 +1,20 @@
-"""Legacy-API LossPanel acceptance, FIXED 2026-09-07 (round-4 8-lens PyPI-preflight audit).
+"""Core-API LossPanel acceptance, FIXED 2026-09-07 (round-4 8-lens PyPI-preflight audit).
 
-THE GAP: README.md's "Legacy API" section lists seven functions in one sentence -- fragility,
-decision_breakdown, breakdown_number, winner_stability, exchangeable_benchmark, pooled_winner,
-per_period_winner, condorcet_winner/condorcet_status, mcs/model_confidence_set -- as one family of
-"original, lower-level diagnostics". An independent review (fixing identify.py's identified()/
-mcs_size(), which sit in the separate "Staged v1.0 API" table) found that within THIS Legacy API
-sentence itself, support for LossPanel input was inconsistent: pooled_winner/decision_breakdown/
-winner_stability already accepted a LossPanel directly (via the shared `_unwrap_panel` helper), but
+RENAMED 2026-09-07 (final pre-publish pass): README.md's section documenting these functions was
+called "Legacy API" -- a misnomer for a package's first-ever public release, since there is no
+prior version for it to be legacy relative to. Renamed to "Core API" throughout (this file included,
+its own name and docstring) to say what these functions actually are: the original, lower-level
+diagnostics report() and the paper's own results are built on, not a deprecated layer being phased
+out.
+
+THE GAP (unchanged from the original 2026-09-07 finding): README.md's "Core API" section lists seven
+functions in one sentence -- fragility, decision_breakdown, breakdown_number, winner_stability,
+exchangeable_benchmark, pooled_winner, per_period_winner, condorcet_winner/condorcet_status,
+mcs/model_confidence_set -- as one family of "original, lower-level diagnostics". An independent
+review (fixing identify.py's identified()/mcs_size(), which sit in the separate "Staged v1.0 API"
+table) found that within THIS Core API sentence itself, support for LossPanel input was
+inconsistent: pooled_winner/decision_breakdown/winner_stability already accepted a LossPanel
+directly (via the shared `_unwrap_panel` helper), but
 per_period_winner, condorcet_winner, condorcet_status (fragility.py), and model_confidence_set
 (mcs.py) did not -- each raised a raw, confusing internal TypeError instead. `mcs()` itself (the raw
 T x K matrix engine model_confidence_set wraps) is a genuinely different input contract and is
@@ -66,7 +74,7 @@ def test_model_confidence_set_accepts_losspanel(panel_and_dict):
     assert p_panel == p_dict
 
 
-def test_readme_legacy_api_sentence_functions_all_accept_losspanel_now(panel_and_dict):
+def test_readme_core_api_sentence_functions_all_accept_losspanel_now(panel_and_dict):
     """The specific inconsistency the audit found: pooled_winner/decision_breakdown/winner_stability
     already worked; the other four in the SAME README sentence didn't. This is the completeness
     check -- every function in that sentence must now behave the same way on LossPanel input."""

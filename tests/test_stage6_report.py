@@ -177,8 +177,8 @@ class TestReportWordingFixes:
 
 def test_report_rejects_non_losspanel_input_with_clear_message():
     """report() must not leak an internal AttributeError when passed a raw dict instead of a
-    LossPanel -- this is the single most plausible mistake for a user coming from the legacy
-    fragility()/model_confidence_set() API, or migrating from examples/quickstart.py's own
+    LossPanel -- this is the single most plausible mistake for a user coming from the Core
+    API's fragility()/model_confidence_set(), or migrating from examples/quickstart.py's own
     pattern."""
     raw = {"a": np.array([1.0, 2.0, 3.0, 4.5]), "b": np.array([1.1, 2.2, 3.1, 4.4])}
     with pytest.raises((TypeError, ValueError)) as excinfo:

@@ -70,14 +70,14 @@ def report(panel, alpha=0.10, full=False):
     already warn once, at construction time, when K exceeds ~100 -- see that warning for the
     up-to-date measured numbers rather than trusting this docstring to stay current."""
     # FIXED 2026-09-02 (10-agent code-review pass, CONFIRMED GAP): report() used to access
-    # panel.losses/.labels directly with no type check, so a raw dict (the legacy fragility()/
+    # panel.losses/.labels directly with no type check, so a raw dict (the Core API's fragility()/
     # model_confidence_set() input shape, and what examples/quickstart.py itself teaches) raised a
     # bare AttributeError instead of a clear message. Every sibling raw-array-tier entry point
     # (pooled_winner, decision_breakdown, winner_stability, fragility()) already accepts a
     # LossPanel via _unwrap_panel() -- this is the OPPOSITE direction (report() REQUIRES a
     # LossPanel, since it uses panel-only fields like .labels), so the fix is a clear rejection,
     # not an unwrap. report() is the README's own "recommended entry point" -- the single most
-    # plausible mistake for a user coming from the legacy API or migrating between entry points.
+    # plausible mistake for a user coming from the Core API or migrating between entry points.
     if not (hasattr(panel, "losses") and hasattr(panel, "labels") and hasattr(panel, "weights")):
         raise TypeError(
             f"report() expects a LossPanel, got {type(panel).__name__}. Build one first with "
