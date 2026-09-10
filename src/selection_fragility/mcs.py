@@ -14,11 +14,13 @@ Hinkley 1997).
 Caveats
 --------
 LIMITED POWER AT SMALL EDGES. Under the DEFAULT studentized elimination rule, the equal-predictive-ability
-test detected true edges of 2%, 5% and 10% at rates of 0.19, 0.50 and 0.68, and a 30% edge 77% of the time --
-on 13 shock-prone macro series with 25-36 evaluation periods each (median 30). False discovery on a genuinely
-null panel is 0.007. Part of the small-edge shortfall is arithmetic rather than resolution: an edge handed to a
-model already well behind does not make it best, and restricted to trials where the edge does make the focal
-model the pooled best, detection at 10% is 0.87. The rest is shock-year variance, not panel length.
+test detected true edges of 2%, 5% and 10% at rates of 0.19, 0.47 and 0.68, and a 30% edge 78% of the time --
+on the 12 curated shock-prone macro series with 25-36 evaluation periods each (median 33). False discovery on a
+genuinely null panel, averaged over 5 independent seeds, is 0.92% (0.98% under the raw elimination rule; a
+single-seed estimate at this budget can plausibly differ by roughly 2x). Part of the small-edge shortfall is
+arithmetic rather than resolution: an edge handed to a model already well behind does not make it best, and
+restricted to trials where the edge does make the focal model the pooled best, detection at 10% is 0.89. The
+rest is shock-year variance, not panel length.
 
 THESE FIGURES REPLACE an earlier docstring reporting 0.00 at every edge up to 10%, which came from a superseded
 design that re-centred all models to an equal pooled mean and made one high-variance benchmark uneliminable.
@@ -31,12 +33,15 @@ distinguished at this sample size", and report an MCS block-length sweep rather 
 
 - The elimination step defaults to Hansen-Lunde-Nason's published e_max statistic (studentized deviation from
   the survivor-set average), not the raw-mean simplification used before 2026-07-27. Switching between the two
-  rules changes NOTHING on the accompanying study's 13 curated series -- both give identical tied sets on every
+  rules changes NOTHING on the accompanying study's 12 curated series -- both give identical tied sets on every
   series -- so the simplification was never load-bearing there, but pass `elimination="raw"` to recover the old
   rule if you need it. Either way, cardinality is cross-checked against an independent MCS implementation
-  (`arch`): the identified/non-identified verdict agrees on all 13 series in the accompanying study; exact
-  tied-set cardinality agrees on 11 of 13. Cross-check against an independent MCS implementation for your own
-  headline claims too."""
+  (`arch`): the identified/non-identified verdict agrees on all 12 series in the accompanying study; exact
+  tied-set cardinality agrees on 10 of 12 (the two disagreements each differ by exactly one model and remain
+  non-identified under either implementation). Cross-check against an independent MCS implementation for your
+  own headline claims too."""
+import warnings
+
 import numpy as np
 
 from .fragility import _unwrap_panel
@@ -160,9 +165,31 @@ ELIMINATION = "raw"` afterwards would silently have no effect.
     if B < 1:
         raise ValueError(f"mcs(): B must be a positive integer; got {B}.")
     T, K = L.shape
+    # LARGE-T*B COST WARNING. ADDED 2026-09-10 (round-6 stress-review, security_resource_exhaustion
+    # lens, CONFIRMED HIGH): the B ceiling above notes "cost scales with T*B" but only ever bounded B
+    # -- T (period count) had no corresponding guard anywhere in the package, unlike K, which got
+    # exactly this treatment in round 4 (panel.py's _LARGE_K_WARN_THRESHOLD). Since mcs()/
+    # model_confidence_set() are public, top-level functions callable directly on a raw array with no
+    # LossPanel gate in between, an ordinary-looking large-T input (e.g. a high-frequency eval frame)
+    # reaches this cost with zero warning. Measured directly on this package's own boot-index
+    # construction (this loop, isolated): T=1000 -> 0.5s, T=10000 -> 5.2s, T=50000 -> 25.7s at the
+    # default B=2000 -- roughly linear in T*B, and at T=200000 (B=2000, still the default) 136s
+    # wall-clock and 3.2GB from this step alone. Warn (not a hard error, unlike B/loss-magnitude
+    # above): a large-but-real T, like a large-but-real K, is a legitimate, supported use case, just a
+    # slow and memory-heavy one -- keyed on T*B jointly since cost is driven by their product, not by
+    # either alone, and set well above the package's own real usage (T~25-75 throughout this
+    # project's own pipeline, T*B~1e5) so it never fires there.
+    if T * B > 20_000_000:
+        warnings.warn(
+            f"mcs(): T={T} periods x B={B} bootstrap resamples = {T * B:,} -- boot-index construction "
+            f"cost scales with T*B (measured on this package's own benchmark: ~5s at T=10,000/B=2,000, "
+            f"~26s at T=50,000/B=2,000, minutes and multiple GB at T=200,000+). This is not an error "
+            f"-- large T is supported -- but expect it to be slow and memory-heavy; consider a smaller "
+            f"B if you don't need fine Monte-Carlo p-value resolution.",
+            UserWarning, stacklevel=2,
+        )
     if T <= block:
         block_eff = max(1, T // 2)
-        import warnings
         warnings.warn(f"mcs(): T={T} <= block={block}; shrinking block to {block_eff} so the bootstrap retains power.")
         block = block_eff
     boot = [_block_idx(T, block, rng) for _ in range(B)]
@@ -211,6 +238,18 @@ ELIMINATION = "raw"` afterwards would silently have no effect.
             p_stop = p; break
         # ELIMINATION RULE -- see docstring. "studentized" is HLN's e_max: drop argmax of the model's mean-loss
         # deviation from the survivor-set average, studentized by the same bootstrap already drawn.
+        # AUDITED 2026-09-10 (structural post-publish sweep for the "raw champion-pick comparison,
+        # no relative floor" bug class already found 4 times elsewhere in this package, and a 5th
+        # time in pivot.py's _champ_opp_contributions by this same sweep). This argmax is NOT an
+        # instance of that class: (1) it is HLN's own published elimination rule (which model to
+        # drop next), not an internal "who is the champion" convenience pick this package invented;
+        # (2) `mcs()` takes no weight parameter at all -- the entire bug class requires a weight
+        # vector whose absolute SCALE can vary while its ratios stay fixed, and there is no such
+        # parameter here to rescale; (3) t_dot is already STUDENTIZED (divided by its own bootstrap
+        # SE), not a raw unnormalized mean, so it does not share pooled_winner's original failure
+        # mode. A tie in t_dot/dbar resolves by array index, which is sorted-name order (`models =
+        # sorted(L)` at the top of this function), matching the deterministic convention used
+        # elsewhere in this package.
         if elimination == "studentized":
             d_dot = dbar - dbar.mean()
             b_dot = bmeans - bmeans.mean(axis=1, keepdims=True)

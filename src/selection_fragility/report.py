@@ -63,12 +63,33 @@ def report(panel, alpha=0.10, full=False):
     contributor, concentration_share, pivot_agreement). `full=True` is accepted for forward
     compatibility with a future expanded view; the default view is intentionally the compact one.
 
-    COST SCALES STEEPLY WITH MODEL COUNT (K), NOT PERIOD COUNT (T) -- documented 2026-09-07, round-4
-    8-lens PyPI-preflight audit. The underlying `arch.bootstrap.MCS` elimination is the dominant
-    cost; measured directly on this package's own report(): ~1s at K=100, ~3s at K=200, potentially
-    minutes at K=500+ (T scales fine even to T=5000). `LossPanel.from_losses`/`from_forecasts`
-    already warn once, at construction time, when K exceeds ~100 -- see that warning for the
-    up-to-date measured numbers rather than trusting this docstring to stay current."""
+    First parameter is named `panel`, not `L` (NOTED 2026-09-10, round-6 stress-review,
+    api_consistency lens): every other public function names its first parameter `L` and accepts a
+    raw {model: array} dict OR a LossPanel; report() specifically REQUIRES a LossPanel (it reads
+    `.weights`/`.labels` directly), so `panel` names that requirement rather than implying a raw
+    dict would also work. Deliberate, not an oversight -- kept as `panel` rather than renamed to
+    avoid a breaking change to the v1.0.0 API for anyone calling `report(panel=...)` by keyword.
+
+    COST SCALES STEEPLY WITH MODEL COUNT (K) -- documented 2026-09-07, round-4 8-lens PyPI-preflight
+    audit. The underlying `arch.bootstrap.MCS` elimination is the dominant cost; measured directly on
+    this package's own report(): ~1s at K=100, ~3s at K=200, potentially minutes at K=500+.
+    `LossPanel.from_losses`/`from_forecasts` already warn once, at construction time, when K exceeds
+    ~100 -- see that warning for the up-to-date measured numbers rather than trusting this docstring
+    to stay current.
+
+    CORRECTED 2026-09-10 (round-6 stress-review, scale_stress lens): this docstring used to add
+    "(T scales fine even to T=5000)" -- FALSE for a panel that reaches a RESOLVED/identified verdict
+    and contains at least one decisively-separated model pair (an everyday shape, not a contrived
+    edge case): report()'s PIVOT section then runs `pivot_agreement`'s 200-subsample loop, each
+    subsample calling `decision_breakdown` -> `breakdown_number`'s O(T) pure-Python greedy loop, once
+    per opponent. Measured directly: fixed K=20 (10 competitive models + 10 with an ordinary +4.0
+    mean offset), report() cost was non-monotonic/threshold-like as the panel crossed into
+    "resolved" -- T=15000 (not yet resolved): 0.43s; T=20000 (now resolved): 10.8-16.1s; T=50000:
+    27-29s -- with ZERO warning at any point (K=20 is well under the K>100 threshold above). This is
+    precisely the regime a user hits once they have enough data for a real answer, the opposite of
+    when the docs promised safety. The K-only cost claim above remains accurate for its own
+    benchmark (a panel NOT yet resolved, or with no decisive pair); it is not a bound on cost for a
+    resolved panel at large T."""
     # FIXED 2026-09-02 (10-agent code-review pass, CONFIRMED GAP): report() used to access
     # panel.losses/.labels directly with no type check, so a raw dict (the Core API's fragility()/
     # model_confidence_set() input shape, and what examples/quickstart.py itself teaches) raised a
@@ -148,10 +169,22 @@ def report(panel, alpha=0.10, full=False):
         lines.append(f"VERDICT: not available for this panel -- {mcs_error}")
     lines.append("")
     lines.append("LEADERBOARD")
-    for mm in sorted(models, key=lambda x: means[x]):
+    ordered = sorted(models, key=lambda x: means[x])
+    # FIXED 2026-09-09 (round-5 stress-review, edge_case_fuzz lens): two model names differing only
+    # in whitespace (e.g. 'ar1' vs 'ar1 ') pass LossPanel's exact-string duplicate check as
+    # legitimately distinct models, but `f"{mm:<15}"` left-justify padding absorbs the difference,
+    # so both LEADERBOARD rows printed under a byte-identical label with no way for a reader to tell
+    # which line is which -- reproduced directly. Same "distinct data prints as an indistinguishable
+    # duplicate" bug class already fixed for PIVOT's period labels (_disambiguate_labels, above);
+    # extended here to model names, using repr() for just the colliding names so a non-colliding
+    # report's output is byte-identical to before this fix.
+    padded = {m: f"{m:<15}" for m in ordered}
+    collisions = {m for m in ordered if list(padded.values()).count(padded[m]) > 1}
+    disp = {m: (repr(m) if m in collisions else m) for m in ordered}
+    for mm in ordered:
         flag = "n/a" if mcs_error is not None else ("in MCS" if mm in survivors else "excluded")
         marker = " (champion)" if mm == champ else ""
-        lines.append(f"  {mm:<15} mean={means[mm]:.4f}  {flag:<9}  periods won={wins[mm]}{marker}")
+        lines.append(f"  {disp[mm]:<15} mean={means[mm]:.4f}  {flag:<9}  periods won={wins[mm]}{marker}")
     lines.append("")
     lines.append("RESOLUTION")
     edge_txt = f"observed edge {_fmt_pct(res['observed_edge'])} vs MDE@80% power {_fmt_pct(res['mde'])}"

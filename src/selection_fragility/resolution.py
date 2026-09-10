@@ -10,7 +10,8 @@ the retired `fragile`/`screen` verdict it replaces.
 import numpy as np
 from scipy.stats import t as tdist
 
-from .fragility import _as_loss_dict, _validate_losses, pooled_winner, _MAX_ABS_LOSS, _unwrap_panel
+from .fragility import (_as_loss_dict, _validate_losses, pooled_winner, _MAX_ABS_LOSS, _unwrap_panel,
+                         _MARGIN_REL_FLOOR)
 from .identify import _validate_alpha
 
 
@@ -139,6 +140,12 @@ def _binding_rival(L, w, champ):
     defines how resolved this decision is. MDE must be computed against this rival, never averaged
     across all rivals: a distant rival cannot make a close call look more resolved than it is.
 
+    NOT THE SAME MODEL AS fragility.py's "binding_opponent". ADDED 2026-09-10 (round-6 stress-review,
+    api_consistency lens): fragility.py's `decision_breakdown`/`fragility()` pick `binding_opponent`
+    by the FEWEST-DELETIONS criterion (k*); this function picks by CLOSEST POOLED MEAN. Different
+    criteria, can name different models on the same panel (18.25% disagreement measured across
+    20,000 random panels) -- see fragility.py's `decision_breakdown` docstring for the full account.
+
     CONFIRMED REGRESSION (independent 'wild' review, 2026-08-17, cross-fix interaction lens): every
     OTHER tie-break in this package was deliberately hardened tonight to be independent of dict/
     column insertion order (`pooled_winner`, `decision_breakdown`, `per_period_winner`, and
@@ -148,10 +155,31 @@ def _binding_rival(L, w, champ):
     built with dict keys in a different order flipped MDE from 12.7% to 14.7% and could flip the
     RESOLUTION verdict outright ("resolved" vs "cannot determine") -- the flagship report field,
     driven purely by Python's dict iteration order. `sorted(rivals)` makes the tie-break depend only
-    on model IDENTITY, matching every sibling tie-break in the package."""
+    on model IDENTITY, matching every sibling tie-break in the package.
+
+    FIXED 2026-09-09 (round-5 stress-review, champion_pattern_hunt lens): the sorted-name tie-break
+    above only guards an EXACT float tie of `abs(means[m]-means[champ])` -- it does not float this
+    comparison to a relative floor for NEAR-ties, the same degenerate-tie-floor gap already fixed in
+    pooled_winner() (2026-08-27/09-02) and in this module's own selection_regret() (2026-09-09).
+    Reproduced directly: with two rivals tied at the champion's pooled mean to within float64 noise,
+    a uniform weight rescaling (w -> w*1e-6, mathematically a no-op for np.average's ratio) flipped
+    which rival compared closer, changing binding_rival, significance_boundary by 73%, and the
+    headline `resolved` verdict itself -- on data whose only change was the unit the weights happen
+    to be expressed in. Now floored the same way pooled_winner() floors its own tie: `means` here are
+    already weight-scale-invariant RATIOS (np.average divides by sum(w)), so the tolerance must be too
+    -- NO `wscale`/`_pair_scale` term, exactly per pooled_winner's own comment on this point ("the
+    ratio np.average returns is already loss-scale magnitude regardless of w's scale"). A first
+    version of this fix reused `_pair_scale` (which DOES carry a `mean(w)` factor, appropriate for
+    RAW un-normalized margins like `_edge_components`'s own `M = sum(w*diff)`, not for a ratio) and
+    the w*1e-6 repro above still flipped `binding_rival` -- caught by re-running that exact repro
+    against the fix before trusting it."""
     means = {m: float(np.average(np.asarray(L[m], float), weights=w)) for m in L}
     rivals = [m for m in L if m != champ]
-    return min(sorted(rivals), key=lambda m: abs(means[m] - means[champ]))
+    dists = {m: abs(means[m] - means[champ]) for m in rivals}
+    best_dist = min(dists.values())
+    tied = [m for m in rivals
+            if dists[m] - best_dist <= _MARGIN_REL_FLOOR * (abs(means[m]) + abs(means[champ])) / 2.0]
+    return min(tied)
 
 
 def _edge_components(L, w):
@@ -194,6 +222,13 @@ def minimum_detectable_edge(L, w=None, power=0.80, alpha=0.05):
     therefore MDE=0 -- any nonzero edge is detectable with certainty. No clipping: an MDE exceeding
     100% of the loss scale is a real, correctly-reported "you cannot resolve any practical edge
     here" result, not an error.
+
+    `alpha` HERE IS INDEPENDENT OF `mcs()`/`identified()`/`mcs_size()`'s OWN `alpha` (NOTED
+    2026-09-10, round-6 stress-review, api_consistency lens): this module's default (0.05) is a
+    conventional one-sided significance level for a power calculation; the MCS family's default
+    (0.10) is Hansen-Lunde-Nason's own convention for their equal-predictive-ability test. Both are
+    individually standard for what they each control -- they are not meant to be the same number,
+    and passing one where the other is expected is a real mistake this docstring exists to head off.
 
     CONFIRMED REGRESSION (real end-to-end practitioner workflow audit, 2026-08-17): `se` is
     ESTIMATED from the same small sample (ddof=1 sample variance over T periods), which is exactly
@@ -300,11 +335,16 @@ def mcb_bound(L, w=None, alpha=0.05):
     _validate_one_sided(alpha)
     L, w = _unwrap_panel(L, w)
     L = _as_loss_dict(L)
+    # FIXED 2026-09-10 (round-6 stress-review, error_message_quality lens): a dedicated
+    # "need at least 2 models for an MCB bound" message used to sit here, but _validate_losses()
+    # below already raises its own (differently-worded) ">=2 models" ValueError on the exact same
+    # condition, on the exact same data, and runs first -- this line was genuinely unreachable dead
+    # code, confirmed by inspection and by calling mcb_bound() on a 1-model dict (it raises
+    # _validate_losses's generic message, never this one). Removed; matches how every sibling
+    # function in this module relies solely on _validate_losses for this case.
     T = _validate_losses(L, w)
     w = np.ones(T) if w is None else np.asarray(w, float)
     models = list(L)
-    if len(models) < 2:
-        raise ValueError(f"need at least 2 models for an MCB bound; got {len(models)}.")
     _champ, _rival, diff, se, mean_champ, _mean_rival = _edge_components(L, w)
     n_rivals = len(models) - 1
     point = float(np.average(diff, weights=w))   # kept as np.average(diff, ...), not mean_rival -
@@ -321,7 +361,7 @@ def mcb_bound(L, w=None, alpha=0.05):
     return bound / _scale(mean_champ)
 
 
-def selection_regret(L, weights=None):
+def selection_regret(L, weights=None, *, w=None):
     """Leave-one-period-out (LOO) cost of the picking RULE, not of any single model: for each held-out
     period t, recompute the pooled champion from the remaining T-1 periods (under the SAME weights as
     the pooled estimate -- a skewed weight vector must actually change which fold-champion gets
@@ -330,7 +370,20 @@ def selection_regret(L, weights=None):
     over all T folds (weighted by each held-out period's own weight) is `selection_regret` -- an
     empirical, backward-looking answer to "what has this picking rule actually cost, historically",
     complementing MDE's forward-looking "what precision does my sample size buy me". No RNG anywhere
-    in this statistic -- fully deterministic given the data."""
+    in this statistic -- fully deterministic given the data.
+
+    `w=` is accepted as an alias for `weights=` (FIXED 2026-09-10, round-6 stress-review,
+    api_consistency lens): every sibling function in this module (minimum_detectable_edge,
+    significance_boundary, mcb_bound, resolution_report) names this parameter `w`, so a caller who
+    learned that convention from any one of them got a raw TypeError the first time they called
+    this function the same way. `weights` is kept as the positional/primary name -- it shipped in
+    the published v1.0.0 and a semver patch release must not break it -- `w` is keyword-only and
+    purely additive."""
+    if w is not None:
+        if weights is not None:
+            raise TypeError("selection_regret() got both 'weights' and 'w' -- pass only one; they "
+                             "are the same parameter (w is an alias for backward-compatible weights).")
+        weights = w
     L, weights = _unwrap_panel(L, weights)
     L = _as_loss_dict(L)
     T = _validate_losses(L, weights)
@@ -342,8 +395,15 @@ def selection_regret(L, weights=None):
     regrets = np.empty(T)
     for t in range(T):
         keep = np.arange(T) != t
-        fold_means = {m: float(np.average(M[m][keep], weights=w[keep])) for m in models}
-        fold_champ = min(sorted(models), key=lambda m: fold_means[m])
+        # FIXED 2026-09-09 (round-3 stress-review, tool_dormant_bugs lens): this used to pick the
+        # fold champion via a raw, un-floored `min(sorted(models), key=...)` on the fold means --
+        # the same class of bug already found and fixed in compare.py's _churn_base_rate (round 2):
+        # on a near-tied fold, this can silently disagree with pooled_winner()'s documented
+        # _MARGIN_REL_FLOOR degenerate-tie logic, which every OTHER champion pick in this package
+        # (including the whole-panel champion selection_regret is itself benchmarked against
+        # implicitly) goes through. Routed through pooled_winner() so a fold's champion always
+        # agrees with what the rest of the package would call the champion on that same fold.
+        fold_champ = pooled_winner({m: M[m][keep] for m in models}, w[keep])
         best_at_t = min(M[m][t] for m in models)
         regrets[t] = M[fold_champ][t] - best_at_t
     return float(np.average(regrets, weights=w))
@@ -422,6 +482,12 @@ def resolution_report(L, w=None, alpha=0.05, power=0.80, mcs_alpha=0.10):
             fragility_read = "resolved"
 
     return {
+        # ADDED 2026-09-10 (round-6 stress-review, api_consistency lens): `champ` was already
+        # computed locally above (via _edge_components) but only `binding_rival` was ever placed in
+        # this dict -- a caller reading resolution_report()'s output had to separately call
+        # pooled_winner() to learn WHICH model the resolution/rival/edge fields are even about.
+        # Purely additive (a new key), so this changes nothing for existing callers.
+        "champion": champ,
         "resolved": resolved,
         "observed_edge": observed_edge,
         "mde": mde,

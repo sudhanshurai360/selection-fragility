@@ -71,11 +71,31 @@ def _validate_losses(L, w=None):
     """Guard against the common footguns -- fewer than 2 models, ragged/empty arrays, and non-finite (NaN/inf) losses
     -- any of which would otherwise produce a CONFIDENT BUT MEANINGLESS answer (a single NaN silently poisons the
     pooled mean and can crown a spurious 'winner'). Returns the per-period length T."""
+    # FIXED 2026-09-10 (round-6 stress-review, error_message_quality lens): this used to start
+    # straight at `len(L) < 2` with no check that L is even dict-like first -- a plausible first
+    # mistake for a new user (passing a plain list, a string, None, a LossPanel object itself
+    # instead of its .losses) raised a raw AttributeError/TypeError deep inside numpy/Python, not a
+    # clear package message. One case was actively misleading: `identified([1,2,3])` did NOT raise
+    # cleanly -- `sorted(L)` on a list silently reinterprets its VALUES as if they were dict keys,
+    # producing a message that falsely implies a real model named '1' was passed. report()/compare()
+    # already have explicit LossPanel type guards; the raw-array tier (pooled_winner,
+    # decision_breakdown, fragility(), resolution_report and siblings, ...) had none.
+    if not hasattr(L, "items"):
+        raise TypeError(
+            f"L must be a {{model: array}} dict (or a LossPanel's own .losses attribute); got "
+            f"{type(L).__name__}. Build a LossPanel first with LossPanel.from_losses(...) if you "
+            f"have a DataFrame/ndarray, or pass panel.losses/panel.weights directly for this "
+            f"raw-array entry point."
+        )
     if len(L) < 2:
         raise ValueError(f"need >=2 models to compare a selection decision; got {len(L)}.")
     T = None
     for m, v in L.items():
-        a = np.asarray(v, float)
+        try:
+            a = np.asarray(v, float)
+        except (TypeError, ValueError) as e:
+            raise TypeError(f"model '{m}'s loss must be an array-like of numeric values; got "
+                             f"{type(v).__name__} that could not be converted ({e}).") from e
         if a.ndim != 1 or a.size == 0:
             raise ValueError(f"each model's loss must be a non-empty 1-D array; '{m}' has shape {a.shape}.")
         if T is None:
@@ -86,7 +106,15 @@ def _validate_losses(L, w=None):
             raise ValueError(f"model '{m}' has non-finite loss values (NaN/inf). Drop or impute those periods before "
                              f"calling -- a single NaN silently poisons the pooled mean and the selected winner.")
     if w is not None:
-        wa = np.asarray(w, float)
+        # FIXED 2026-09-10 (round-6 stress-review, error_message_quality lens): same gap as L above
+        # -- a bare `np.asarray(w, float)` let a realistic weights mistake (a dict, a list with one
+        # bad string) escape as a raw numpy TypeError/ValueError naming neither "weights" nor this
+        # function.
+        try:
+            wa = np.asarray(w, float)
+        except (TypeError, ValueError) as e:
+            raise TypeError(f"weights must be an array-like of numeric values; got {type(w).__name__} "
+                             f"that could not be converted ({e}).") from e
         if wa.size != T or not np.all(np.isfinite(wa)):
             raise ValueError(f"weights must be finite and of length {T}; got length {wa.size}.")
         # FIXED 2026-08-26 (independent ML-engineer review, cross-package consistency lens): this
@@ -441,6 +469,18 @@ def decision_breakdown(L: dict, w=None, a=None, return_ties=False):
     Returns (k*, binding_opponent, removed_idx), or with return_ties=True
     (k*, binding_opponent, removed_idx, all_binding_opponents).
 
+    NOT THE SAME MODEL AS resolution.py's "binding_rival". ADDED 2026-09-10 (round-6 stress-review,
+    api_consistency lens): `binding_opponent` here is picked by the FEWEST-DELETIONS criterion (the
+    opponent whose pairwise breakdown_number against the champion is smallest); resolution.py's
+    `_binding_rival` (feeding `minimum_detectable_edge`/`significance_boundary`/`mcb_bound`/
+    `resolution_report`'s own `binding_rival` field) is picked by a DIFFERENT criterion -- whichever
+    rival's pooled mean is closest to the champion's. These answer different questions (which
+    opponent is cheapest to flip to, vs. which rival is statistically closest) and can name different
+    models on the same panel -- measured directly: 18.25% disagreement rate across 20,000 random
+    panels. `report()`'s PIVOT section (k*/concentration) reflects THIS opponent; its RESOLUTION
+    section reflects resolution.py's rival. The near-identical names are a known source of possible
+    confusion, not an error -- read the field name in context, not just "binding X".
+
     TIE-BREAK. k* is a minimum and is unambiguous, but SEVERAL opponents can attain it, and they disagree about the
     derived quantities -- `removed`, the pivotal period, and above all `concentration`, which is computed against
     whichever opponent is named. This previously resolved by dict insertion order, i.e. silently. It now resolves by
@@ -733,8 +773,23 @@ def fragility(L: dict, w=None, shock_periods=None, labels=None, n_boot=2000, see
     # sorted(): on an exact pooled-loss tie, `min` otherwise returns whichever model the caller happened to
     # insert into the dict first, so the same data in a different key order gives a different runner-up.
     # Same determinism rule as pooled_winner() and decision_breakdown().
-    pooled_runner_up = min(sorted(m for m in L if m != a),
-                           key=lambda m: float(np.average(np.asarray(L[m], float), weights=w)))
+    #
+    # FIXED 2026-09-09 (round-5 stress-review, champion_pattern_hunt lens): the sorted-name tie-break
+    # above only guards an EXACT float tie -- it previously compared raw means with no relative floor
+    # for NEAR-ties, the same degenerate-tie-floor gap already fixed in pooled_winner() itself
+    # (2026-08-27/09-02) just a few lines above. Reproduced directly: with two non-champion models
+    # tied at the same pooled mean to within float64 noise, pooled_runner_up flipped under a uniform
+    # weight rescaling (w -> w*1e-6, a documented no-op for np.average's ratio) while pooled_winner()
+    # called on the identical remaining-models dict did not. Routed through pooled_winner() so this
+    # field always agrees with what the rest of the package would call second place.
+    #
+    # SINGLE-OPPONENT GUARD (caught by the existing test suite before trusting this fix): a 2-model
+    # panel leaves exactly one non-champion model, and pooled_winner() itself refuses fewer than 2
+    # models (`_validate_losses`'s own >=2-model guard) -- there is no tie to floor when only one
+    # candidate remains, so that trivial case is returned directly rather than routed through
+    # pooled_winner().
+    _rest = {m: L[m] for m in L if m != a}
+    pooled_runner_up = next(iter(_rest)) if len(_rest) == 1 else pooled_winner(_rest, w)
     k, b, removed, binding_ties = decision_breakdown(L, w, a, return_ties=True)
     la = np.asarray(L[a], float)
     lb = np.asarray(L[b], float) if b is not None else la          # guard: single-model dict (no opponents)
@@ -763,11 +818,14 @@ def fragility(L: dict, w=None, shock_periods=None, labels=None, n_boot=2000, see
     # using the SAME per-pair scale formula as breakdown_number (mean(|la|)+mean(|lb|))/2 *
     # mean(w)), for both `concentration`/`conc_by_opp` here AND `degenerate` below -- all three now
     # agree with the actual k* computation on what counts as degenerate.
-    def _pair_scale(_la, _lb):
-        s = float(np.mean(np.abs(_la)) + np.mean(np.abs(_lb))) / 2.0 if T else 0.0
-        wscale = float(np.mean(w)) if T else 0.0
-        return s * wscale
-    _pscale_ab = _pair_scale(la, lb)
+    #
+    # FIXED 2026-09-09 (round-2 stress-review, tool_source_audit lens): this used to be a LOCAL
+    # closure reimplementing the module-level _pair_scale(la, lb, w, T) above (defined 2026-09-02
+    # "so winner_stability() can share the identical degeneracy check" -- this function shadowed it
+    # with its own copy instead of calling it, contradicting that extraction's own stated purpose of
+    # one shared implementation). Both were byte-identical in logic (only `w`/`T` closed-over vs
+    # passed as args differed), so this changes no behavior -- it just removes the second copy.
+    _pscale_ab = _pair_scale(la, lb, w, T)
     concentration = (float(np.max(c) / M)
                      if M > 0 and (M / T) > _MARGIN_REL_FLOOR * _pscale_ab else np.nan)
     # `concentration` is computed against the NAMED binding opponent. When several opponents tie at k*, each
@@ -779,7 +837,7 @@ def fragility(L: dict, w=None, shock_periods=None, labels=None, n_boot=2000, see
         _lm = np.asarray(L[_m], float)
         _cm = w * (_lm - la)
         _Mm = float(_cm.sum())
-        _pscale_am = _pair_scale(la, _lm)
+        _pscale_am = _pair_scale(la, _lm, w, T)
         conc_by_opp[_m] = (float(np.max(_cm) / _Mm)
                            if _Mm > 0 and (_Mm / T) > _MARGIN_REL_FLOOR * _pscale_am else np.nan)
     _fin = [v for v in conc_by_opp.values() if np.isfinite(v)]

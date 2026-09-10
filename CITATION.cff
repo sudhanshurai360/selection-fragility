@@ -26,6 +26,22 @@ authors:
 # then rather than guess or backdate.
 # ADDED 2026-09-08: the release happened -- GitHub release v1.0.0 published, Zenodo deposit
 # confirmed live at the DOI below (fetched directly, not assumed from the GitHub-Zenodo widget).
+# NOTE 2026-09-09, UPDATED same day: pyproject.toml/CHANGELOG.md/__init__.py went 1.0.0 -> 1.0.1
+# (commit 146d72b, doc-sync fixes, no code/behavior change) -> 1.0.2 (commits f1a0fae/f8a3fce, two
+# real pooled_winner-bypass bug fixes, split into their own CHANGELOG entry) -> 1.0.3 (round-5
+# stress-review: a third and fourth instance of the same bug class, resolution.py's _binding_rival
+# and fragility.py's pooled_runner_up, plus a report.py LEADERBOARD disambiguation fix; round-6
+# 10-lens pre-publish due-diligence review added 21 more fixes -- two real CLI bugs defeating
+# --exit-code's CI-gating contract, a resource-exhaustion gap, input-validation gaps, a false
+# performance-docs claim, and API-consistency/error-message cleanups -- accumulated into the SAME
+# 1.0.3, not a new bump, since 1.0.3 was never published either; round-7, the FINAL pre-publish
+# review before v1.0.3 actually ships, added 5 more fixes -- a silently-misread unpivoted-long-frame
+# gap in from_forecasts(), a CLI UnicodeEncodeError crash on non-Latin-1 model names, a ragged-array
+# error message, plus two stale-number touch-ups) -- this file is deliberately NOT
+# bumped yet. version/date-released/the DOI below describe the live v1.0.0
+# Zenodo deposit; they will be updated in a dedicated follow-up commit once a new GitHub release
+# actually mints its own Zenodo deposit, the same way this file's own 2026-09-08 update was done --
+# not guessed or bumped in advance.
 date-released: "2026-09-08"
 version: 1.0.0
 license: MIT

@@ -548,6 +548,29 @@ class TestForecastDuplicateGroupPeriodRow:
         panel = LossPanel.from_forecasts(df, y_true="y", period="period", models=["a", "b"])
         assert panel.models == ["a", "b"]
 
+    def test_unpivoted_long_frame_with_autoinferred_models_warns(self):
+        """FIXED 2026-09-10 (round-7 final pre-publish review, real_data_dogfood lens): the single
+        most natural mistake in this documented API -- calling from_forecasts() on a still-long/tidy
+        frame (one row per (period, model), with a leftover model-identity column) without pivoting
+        to wide-by-model first, and with no group=. Reproduced on real project data: this silently
+        auto-inferred leftover numeric columns as if they were competing models, pooling every real
+        model's rows together within each period, with zero warnings. The duplicate-(period,group)
+        check above deliberately does NOT fire when group=None (the sibling test just above this one
+        proves that), so this needed its own, differently-scoped warning -- keyed on rows repeating
+        within a period (a genuinely wide frame has exactly one row per period), not on group=None
+        alone, so it does not fire on the common, correct wide-format case (see the explicit-models
+        test above and the auto-infer tests elsewhere in this file, neither of which should warn)."""
+        rows = []
+        for p in range(20):
+            for model_name, val in [("real_model_a", 1.0 + p * 0.01), ("real_model_b", 1.2 + p * 0.01)]:
+                rows.append({"period": p, "y": 1.1, "model": model_name, "pred": val, "extra_metric": 5.0})
+        df = pd.DataFrame(rows)
+        with pytest.warns(UserWarning, match=r"(?i)rows repeat within a period"):
+            panel = LossPanel.from_forecasts(df, y_true="y", period="period")
+        # confirms the failure mode itself: auto-inference crowned "pred"/"extra_metric" as models,
+        # not the real "model" column's values -- the warning exists precisely because this happens.
+        assert set(panel.models) == {"pred", "extra_metric"}
+
 
 class TestForecastGroupPeriodColumns:
     def test_missing_group_column_raises(self, nixtla_cv_frame):
@@ -687,6 +710,19 @@ class TestMalformedShapeAtConstruction:
         with pytest.raises(ValueError, match=r"(?i)1-d|dimension|shape"):
             LossPanel.from_losses({
                 "a": [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+                "b": [1.0, 2.0, 3.0],
+            })
+
+    def test_ragged_model_array_gives_clear_message_not_raw_numpy_error(self):
+        """FIXED 2026-09-10 (round-7 final pre-publish review, adversarial_input_fuzzing lens): a
+        RAGGED (jagged, unequal-inner-length) nested list -- distinct from the RECTANGULAR 2-D case
+        above, which numpy converts cleanly before the ndim check catches it -- made the bare
+        np.asarray(v) call itself raise, escaping as a raw numpy internals message naming neither
+        'LossPanel', 'from_losses()', nor the offending model key. Reachable via LossPanel.load() on
+        a tampered/malformed saved panel file with this exact shape in its 'losses' dict."""
+        with pytest.raises(ValueError, match=r"(?i)model 'a'.*(ragged|jagged)"):
+            LossPanel.from_losses({
+                "a": [[1.0, 2.0], [3.0]],   # ragged: inner lists have different lengths
                 "b": [1.0, 2.0, 3.0],
             })
 

@@ -30,7 +30,27 @@ def _validate_weights(w, T):
     # panel object -- then silently changed the "already-validated" panel's weights underneath it.
     # LossPanel's own docstring calls itself "the single validated entry point"; that guarantee
     # requires the data to actually be copied in, not merely dtype-coerced.
-    w = np.array(w, dtype=float, copy=True)
+    # FIXED 2026-09-10 (round-6 stress-review, security_resource_exhaustion/error_message_quality
+    # lenses): a bare, un-guarded `np.array(w, dtype=float, copy=True)` let a realistic weights
+    # mistake (a dict, a list with one bad string) escape as a raw numpy/Python error naming neither
+    # "weights" nor this function -- a striking gap given every OTHER input in this "fanatically
+    # validated" package gets a clear domain message. A bare string is called out specially: the
+    # only string weights accepts anywhere in the package is from_forecasts()'s "count" shorthand,
+    # which from_losses() (routed through this same function) does not support -- a caller who
+    # learned the shorthand from one constructor got no hint it doesn't apply to the other.
+    if isinstance(w, str):
+        raise TypeError(
+            f"weights must be an array-like of {T} numeric values (one per period), not a string; "
+            f"got {w!r}. The 'count' shorthand is only accepted by LossPanel.from_forecasts() "
+            f"(weight each period by its row count) -- from_losses() has no string shorthand."
+        )
+    try:
+        w = np.array(w, dtype=float, copy=True)
+    except (TypeError, ValueError) as e:
+        raise TypeError(
+            f"weights must be an array-like of {T} numeric values (one per period); got "
+            f"{type(w).__name__} that could not be converted to a numeric array ({e})."
+        ) from e
     if w.size != T:
         raise ValueError(f"weights must have length {T} (one per period); got length {w.size}.")
     if not np.all(np.isfinite(w)):
@@ -156,7 +176,10 @@ def _check_K_vs_T(K, T):
             f"(measured on this package's own benchmark: ~1s at K=100, ~3s at K=200, potentially "
             f"minutes at K=500+). This is not an error -- large model sweeps are supported -- but "
             f"expect it to be slow; if you don't need per-model MCS membership, consider narrowing "
-            f"to a candidate shortlist first.",
+            f"to a candidate shortlist first. NOTE: this warning is keyed on K only -- report()'s "
+            f"PIVOT section can also get expensive at large T once a panel resolves, even at a "
+            f"modest K well under this threshold; see README.md's 'A note on cost' for measured "
+            f"numbers.",
             UserWarning, stacklevel=3,
         )
 
@@ -197,8 +220,8 @@ class LossPanel:
         elif isinstance(data, np.ndarray):
             loss_dict, inferred_labels, labels_are_positional = cls._from_ndarray(data)
         else:
-            raise TypeError(f"from_losses() does not know how to read {type(data)}; pass a wide "
-                             f"DataFrame, a dict of {{model: array}}, or a 2-D ndarray (periods x models).")
+            raise TypeError(f"from_losses() does not know how to read {type(data).__name__}; pass a "
+                             f"wide DataFrame, a dict of {{model: array}}, or a 2-D ndarray (periods x models).")
 
         T = len(next(iter(loss_dict.values())))
         if T == 0:
@@ -390,7 +413,20 @@ class LossPanel:
                     f"model '{k}' is a scalar, not a per-period array -- from_losses() needs each "
                     f"model's value to be a 1-D sequence of per-period losses."
                 )
-            arr_for_shape = v.to_numpy() if isinstance(v, pd.Series) else np.asarray(v)
+            # FIXED 2026-09-10 (round-7 final pre-publish review, adversarial_input_fuzzing lens): a
+            # RAGGED (jagged, unequal-inner-length) nested list -- e.g. a tampered/malformed saved
+            # LossPanel JSON file's "losses" dict -- made the bare np.asarray(v) below raise a raw
+            # numpy internals message ("setting an array element with a sequence...") naming neither
+            # "LossPanel", "from_losses", nor the offending model key, unlike every sibling shape/
+            # dtype check in this same loop. The sibling weights path (_validate_weights, below) was
+            # already protected against the identical ragged-list case; this closes the same gap
+            # here.
+            try:
+                arr_for_shape = v.to_numpy() if isinstance(v, pd.Series) else np.asarray(v)
+            except (TypeError, ValueError) as e:
+                raise ValueError(f"model '{k}'s value could not be converted to an array -- from_losses() "
+                                  f"needs each model's value to be a rectangular 1-D sequence of per-period "
+                                  f"losses, not a ragged/jagged nested sequence ({e}).") from e
             if pd.api.types.is_bool_dtype(getattr(v, "dtype", arr_for_shape.dtype)):
                 raise TypeError(
                     f"model '{k}' is boolean, not a per-period numeric loss -- looks like a "
@@ -454,13 +490,19 @@ class LossPanel:
     def from_forecasts(cls, df, y_true, period, group=None, models=None, metric="mae", weights=None):
         if not _is_pandas(df):
             raise TypeError("from_forecasts() expects a pandas DataFrame.")
+        # FIXED 2026-09-10 (round-6 stress-review, error_message_quality lens): these three
+        # "named column not found" cases raised KeyError while the two sibling cases below (models=,
+        # weights=) already raise ValueError for the identical situation -- an inconsistency with no
+        # reason behind it, and KeyError's own __str__ wraps the message in an extra pair of quotes
+        # (a "not found in the frame."" artifact a caller printing str(e) would see). Standardized to
+        # ValueError, matching the majority precedent already set by models=/weights=.
         if y_true not in df.columns:
-            raise KeyError(f"y_true column '{y_true}' not found in the frame.")
+            raise ValueError(f"y_true column '{y_true}' not found in the frame.")
         if period not in df.columns:
-            raise KeyError(f"period column '{period}' not found in the frame.")
+            raise ValueError(f"period column '{period}' not found in the frame.")
         if group is not None:
             if group not in df.columns:
-                raise KeyError(f"group column '{group}' not found in the frame.")
+                raise ValueError(f"group column '{group}' not found in the frame.")
             if group == period:
                 raise ValueError(f"group and period must be different columns; got the same column "
                                   f"'{group}' passed for both.")
@@ -555,6 +597,35 @@ class LossPanel:
                         f"Pass models=[...] explicitly to override."
                     )
                 model_cols.append(c)
+            # UNPIVOTED-LONG-FRAME WARNING. ADDED 2026-09-10 (round-7 final pre-publish review,
+            # real_data_dogfood lens, CONFIRMED against real project data). The single most natural
+            # mistake in this documented API: calling from_forecasts() on a still-long/tidy frame
+            # (one row per (period, model), with a leftover model-identity column) without first
+            # pivoting to wide-by-model, and with no group= (the common case when there is no
+            # separate series/group axis). Reproduced directly on
+            # multiseries/results/breadth_distinct/breadth_distinct_predictions.csv: this silently
+            # auto-inferred leftover numeric columns (a calendar-year column, the raw prediction
+            # column, precomputed per-row error/scale columns) as "6 competing models," pooling every
+            # real model's rows together within each period, and report() printed a fully confident
+            # VERDICT/LEADERBOARD over nonsense columns -- zero warnings, zero errors. The existing
+            # duplicate-(period,group) guard below is deliberately scoped to fire only when group is
+            # NOT None (repeated period rows are a legitimate, intentional shape when there is no
+            # group axis), so it structurally cannot catch this. The distinguishing signal: a
+            # genuinely wide-format frame has exactly one row per period; a not-yet-pivoted long
+            # frame has one row per (period, model), so rows repeat within a period. Keyed on that,
+            # not on "group is None" alone, to avoid warning on the common, correct wide-format case.
+            if group is None and len(df) > df[period].nunique():
+                warnings.warn(
+                    f"from_forecasts(): {len(df)} rows but only {df[period].nunique()} distinct "
+                    f"'{period}' values -- rows repeat within a period. If your data has one row per "
+                    f"(period, model) with a model-identifier column (a long/tidy frame), it needs to "
+                    f"be pivoted to wide-by-model first (see README's 'Ingesting forecast frames'), "
+                    f"or the auto-inferred model columns {model_cols!r} may not be the real models -- "
+                    f"they could be leftover metadata/error columns silently pooled across models. "
+                    f"Pass models=[...] explicitly once you've confirmed the right columns, or set "
+                    f"group= if this is intentionally a multi-series/multi-group panel.",
+                    UserWarning, stacklevel=3,
+                )
         else:
             missing = [m for m in models if m not in df.columns]
             if missing:
@@ -571,7 +642,7 @@ class LossPanel:
                                   f"'mape', or pass a callable(y_true, y_pred).")
         elif not callable(metric):
             raise ValueError(f"metric must be a string ('mae'/'mse'/'rmse'/'mape') or a callable "
-                              f"(y_true, y_pred) -> per-row loss; got {type(metric)}.")
+                              f"(y_true, y_pred) -> per-row loss; got {type(metric).__name__}.")
 
         y = df[y_true].to_numpy(float)
         if metric == "mape" and np.any(y == 0):

@@ -3,7 +3,7 @@ name: selection-fragility test
 # ADDED 2026-09-07 (round-4 8-lens PyPI-preflight audit, CONFIRMED HIGH). This is the STANDALONE-REPO
 # copy of the CI matrix -- a real gap the audit found: the only version of this workflow that
 # actually runs today lives at the PRIVATE monorepo's own root
-# (Paper3_UIClaims_Forecasting/.github/workflows/selection-fragility-test.yml, moved there
+# (.github/workflows/selection-fragility-test.yml there), moved
 # 2026-08-27 because GitHub only discovers workflow files at <repo-root>/.github/workflows/, and
 # this package's directory is a SUBDIRECTORY of that monorepo, not its own repo -- see that file's
 # own comment for the full story). But `release/selection-fragility/` is also meant to become its

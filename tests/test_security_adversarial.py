@@ -13,6 +13,7 @@ import json
 import os
 import re
 import tempfile
+import warnings
 
 import numpy as np
 import pytest
@@ -189,6 +190,60 @@ def test_bootstrap_count_ceiling_enforced():
     with pytest.raises(ValueError, match="bootstrap-resample ceiling"):
         model_confidence_set(L, B=1_000_000)
     assert time.time() - t0 < 1.0, "B=1,000,000 should be rejected before any bootstrap work starts"
+
+
+def test_large_T_times_B_warns():
+    """FIXED 2026-09-10 (round-6 stress-review, security_resource_exhaustion lens): the B ceiling
+    above notes "cost scales with T*B" but only ever bounded B -- T (period count) had no
+    corresponding guard anywhere in the package, unlike K, which got exactly this treatment in an
+    earlier round. mcs()/model_confidence_set() are public, callable directly on a raw array with no
+    LossPanel gate in between, so an ordinary-looking large-T input reached this cost (measured:
+    minutes and multiple GB at T=200,000, B=2,000 -- still the DEFAULT B) with zero warning."""
+    from selection_fragility.mcs import mcs
+
+    # normal usage: no warning
+    rng = np.random.default_rng(0)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mcs(rng.normal(size=(50, 5)), B=2000)
+    assert not any("T=" in str(x.message) and "bootstrap resamples" in str(x.message) for x in w)
+
+    # T*B past the threshold: warns, does not raise (large-but-real T is a supported use case)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mcs(rng.normal(size=(15000, 5)), B=2000)
+    assert any("bootstrap resamples" in str(x.message) for x in w)
+
+
+def test_wrong_type_L_and_w_give_clear_typeerror_not_raw_internal_error():
+    """FIXED 2026-09-10 (round-6 stress-review, error_message_quality lens): the raw-array tier
+    (pooled_winner, decision_breakdown, fragility(), resolution_report and siblings, identified()/
+    mcs_size()) had no duck-type check on L and no wrapped conversion for w -- a plausible mistake
+    (passing a list/string instead of a {model: array} dict, or a dict/bad-string for weights)
+    escaped as a raw AttributeError/TypeError/ValueError from deep inside numpy or Python, naming
+    neither the argument nor the calling function. Worst case: identified([1,2,3]) did not raise
+    cleanly at all -- `sorted(L)`/`L[m]` silently reinterpreted the list's VALUES as dict keys,
+    producing a message that falsely implied a real model named '1' was passed."""
+    import selection_fragility as sf
+
+    L = {"a": np.array([1.0, 2.0, 3.0]), "b": np.array([2.0, 3.0, 4.0])}
+
+    for bad_L in ("xyz", [1, 2, 3], None, 42):
+        with pytest.raises(TypeError, match=r"(?i)L must be a"):
+            sf.resolution_report(bad_L)
+        with pytest.raises(TypeError, match=r"(?i)L must be a"):
+            sf.pooled_winner(bad_L)
+    with pytest.raises(TypeError, match=r"(?i)L must be a"):
+        sf.identified([1, 2, 3])   # the actively-misleading case: sorted(L)/L[m] used to reinterpret
+                                     # list VALUES as dict keys instead of raising cleanly
+
+    for bad_w in ({"a": 1, "b": 2, "c": 3}, ["1", "2", "x"]):
+        with pytest.raises(TypeError, match=r"(?i)weights must be"):
+            sf.pooled_winner(L, w=bad_w)
+    with pytest.raises(TypeError, match=r"(?i)weights must be"):
+        sf.LossPanel.from_losses(L, weights={"a": 1, "b": 2})
+    with pytest.raises(TypeError, match=r"(?i)weights must be.*string"):
+        sf.LossPanel.from_losses(L, weights="count")
 
 
 # ---------------------------------------------------------------------------

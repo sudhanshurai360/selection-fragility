@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "selection-fragility"
-version = "1.0.0"
+version = "1.0.3"
 description = "Decision breakdown point (k*) and ranking-fragility diagnostics for forecast model selection"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,13 @@ license = "MIT"
 authors = [{ name = "Sudhanshu Rai" }]
 keywords = ["forecasting", "model-selection", "model-confidence-set", "robustness", "breakdown-point", "evaluation"]
 classifiers = [
+    # ADDED 2026-09-10 (round-6 stress-review, packaging_metadata lens): no Development Status
+    # classifier was ever declared, across v1.0.0 (live) and every local bump since -- not a
+    # regression, just never added. "4 - Beta" reflects where this package actually is: a real,
+    # tested public API (556 tests) that has also had real correctness bugs found and fixed across
+    # seven stress-review rounds since its v1.0.0 release -- "5 - Production/Stable" would overstate
+    # that track record.
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -87,3 +94,7 @@ where = ["src"]
 # xfail genuinely still fails (confirmed via `pytest -v`), so this doesn't turn a false pass into a
 # reported failure.
 xfail_strict = true
+# ADDED 2026-09-09 (round-2 stress-review, tool_test_quality lens): test_security_adversarial.py's
+# @pytest.mark.slow use was never registered here, so every collection printed a
+# PytestUnknownMarkWarning. Registered so `-m "not slow"` also works for anyone who wants to skip it.
+markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]

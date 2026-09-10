@@ -9,6 +9,8 @@ nominal size at near-ties, a structural degeneracy in any ratio of the two large
 Both replacements were kept only after matched-false-positive-rate testing, not an AUC comparison --
 AUC misled this project twice already on exactly this kind of candidate-statistic screening.
 """
+import math
+
 import numpy as np
 
 from .fragility import _as_loss_dict, _validate_losses, pooled_winner, decision_breakdown, _unwrap_panel
@@ -48,10 +50,29 @@ def _champ_opp_contributions(L, w):
     if _k == 0:
         return None, None, None
     la = np.asarray(L[champ], float)
+    # FIXED 2026-09-10 (dedicated structural audit, prompted by an independent second opinion noting
+    # that the same champion-floor bug had already been found 4 times separately and recommending a
+    # systematic sweep rather than trusting a 5th instance to surface by luck). This IS that 5th
+    # instance, found by the audit it recommended.
+    # `M > best_M` (a raw float64 comparison, no relative floor) is exactly the pattern already fixed
+    # four times elsewhere in this package -- but the docstring above explicitly rejected adding a
+    # sorted-NAME floor/fallback here, because that would reintroduce the exact rename-dependence bug
+    # this function was built to avoid (TestPivotRenameInvariance). A floor+name-fallback was NOT the
+    # right fix for that reason. Reproduced the actual defect: two opponents whose per-period
+    # contributions are PERMUTATIONS of each other (mathematically identical total M, by construction
+    # of the tie) gave DIFFERENT float64 sums under `c.sum()` (numpy's pairwise summation is order-
+    # dependent) at weight scales 1e-6 and 1e-3 -- a genuine data-driven tie was reported as a real
+    # difference purely from summation order, flipping which opponent (and therefore which pivotal
+    # period) got named. `math.fsum` (Shewchuk's algorithm) computes a correctly-rounded sum that is
+    # PROVABLY invariant to input order -- not a floor/threshold, an exact fix: permutation-tied
+    # inputs now sum to the bit-identical float regardless of scale or order, verified directly across
+    # scale in {1e-12...1e9}. This fixes the root cause (order-dependent summation) rather than
+    # working around it, so it does NOT reopen the rename-dependence issue -- ties are still broken by
+    # a genuine data property (M), just one computed correctly now.
     best_opp, best_M, best_c = None, -np.inf, None
     for t in ties:
         c = w * (np.asarray(L[t], float) - la)
-        M = float(c.sum())
+        M = math.fsum(c)
         if M > best_M:
             best_M, best_opp, best_c = M, t, c
     return champ, best_opp, best_c

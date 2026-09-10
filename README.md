@@ -36,8 +36,9 @@ import numpy as np
 from selection_fragility import LossPanel, report
 
 # Per-period loss for each model over T periods (e.g. per-year MASE); lower is better.
-# Ten years of losses for three models: ar1 is steady, nbeats is better on average but
-# blows up in one shock year, ets is uniformly worse.
+# Ten years of losses for three models: ar1 is steady, nbeats wins nine of the ten years
+# but one shock-year loss (2.60) is large enough that ar1 wins on the pooled mean anyway,
+# ets is uniformly worse.
 L = {
     "ar1":    np.array([1.00, 0.98, 1.02, 1.01, 0.99, 1.03, 0.97, 1.00, 1.02, 0.98]),
     "nbeats": np.array([0.90, 0.88, 0.92, 0.91, 0.89, 0.93, 0.87, 0.90, 2.60, 0.88]),
@@ -84,10 +85,17 @@ functions behind each section, and **Core API** for the lower-level `fragility()
 | 6 — report | `report(panel, alpha=0.10, full=False)` | the one-screen summary of stages 0-4 |
 
 **A note on cost.** Stages 1 and 6 (`identified`/`mcs_size`/`report`) scale steeply with the number
-of *models* (K), not the number of periods (T) — measured directly: ~1s at K=100, ~3s at K=200,
-potentially minutes at K=500+. `LossPanel` warns once, at construction time, past K≈100. Large
-model sweeps (an AutoML search, a big hyperparameter grid) are supported, just slow; narrow to a
-candidate shortlist first if you don't need per-model MCS membership on the full set.
+of *models* (K) — measured directly: ~1s at K=100, ~3s at K=200, potentially minutes at K=500+.
+`LossPanel` warns once, at construction time, past K≈100. Large model sweeps (an AutoML search, a
+big hyperparameter grid) are supported, just slow; narrow to a candidate shortlist first if you
+don't need per-model MCS membership on the full set. **Corrected 2026-09-10** (round-6 stress-review):
+this note previously also said "not the number of periods (T)" — false for `report()` once a panel
+is resolved and contains a decisively-separated pair (an everyday shape): PIVOT's k*/concentration
+computation is O(T) per opponent per bootstrap subsample and is NOT covered by the K-only warning
+above. Measured at a modest K=20 (under the K>100 threshold, so no warning fires): report() took
+10.8-16.1s at T=20,000 once resolved, 27-29s at T=50,000. `mcs()`'s own bootstrap (called directly,
+bypassing LossPanel) similarly has no T guard — large T is supported but not free; see its own
+warning at very large T×B.
 
 **Ingesting forecast frames.** `from_forecasts()` reads a *wide-by-model* cross-validation frame
 directly — one row per (series, period), one column per model's prediction — the shape
@@ -171,7 +179,7 @@ documented inline in `report()`'s own docstring.
 | `binding_opponent` / `binding_opponents` | the rival that overtakes the winner with the fewest deletions; the full tied set when several do |
 | `concentration_range` | `(min, max)` of `concentration` across the tied binding opponents — report this, not the point |
 | `plurality_winners` | full set of per-period winners when the plurality is itself tied |
-| `screen` | convenience **screening** flag: degenerate margin, **or** `winner_stability < 0.60`, **or** `k*/T < 0.25`. A triage heuristic, not a calibrated verdict. |
+| `screen` | convenience **screening** flag: degenerate margin, **or** `winner_stability < 0.60`, **or** `k*/T < 0.25`. A triage heuristic, not a calibrated verdict, and deliberately rougher than any published fixed rule you may be trying to reproduce — see the callout below. |
 | `fragile` | fragility **relative to chance**: `True` if the margin is degenerate; otherwise `True`/`False` against `benchmark`'s 5th percentile if you pass one, and **`None` (unknown) if you do not**. It is never `False` merely because no benchmark was given. |
 
 > **⚠️ `winner_stability` is NOT calibrated by itself — always compare it to `exchangeable_benchmark()`.**
@@ -179,37 +187,49 @@ documented inline in `report()`'s own docstring.
 > null median is about **0.50**, with a 5th percentile near **0.30**. So a value anywhere in the 0.4–0.6 range is what
 > **chance alone** produces — it is not evidence of fragility. Compute `exchangeable_benchmark(K, T)` for *your* K and
 > T and report your observed value against it: a result is unusually fragile *relative to chance* only if it falls
-> below that 5th percentile. On the accompanying study's own 26-cell panel, 14 cells sit below 0.60 but only **2**
+> below that 5th percentile. On the accompanying study's own 24-cell panel, 12 cells sit below 0.60 but only **3**
 > fall below the null's 5th percentile — which is roughly what chance would produce. Never read a bare threshold, and
 > never read `winner_stability` against `1/K`.
 >
-> **Reading `k_star`, `fragile`, `concentration`:** `k_star == 0` means there is *no strict* pooled winner (a tie) —
-> read the MCS, not "maximally fragile." `fragile` is `True` when the margin is degenerate, **or**
+> **Reading `k_star`, `screen`, `fragile`, `concentration`:** `k_star == 0` means there is *no strict* pooled winner
+> (a tie) — read the MCS, not "maximally fragile." `screen` is `True` when the margin is degenerate, **or**
 > `winner_stability < 0.60`, **or** `k*/T < 0.25` — any one of the three suffices (each axis can independently raise
-> it). Because the 0.60 cut is *not* calibrated (see above), treat `fragile` as a **screening flag, never a finding**.
-> It also does **not** capture MCS non-identification, so always read it *together with* the MCS (an exact tie is
-> maximally non-identified yet can show `fragile == False`). `concentration` is `nan` when there is no strict winner.
+> it); because the 0.60 cut is *not* calibrated (see above), treat `screen` as a **triage flag, never a finding**.
+> `fragile` is the stricter, calibrated field: `True` only if the margin is degenerate or `winner_stability` falls
+> below *your own* `exchangeable_benchmark(K, T)`'s 5th percentile, and `None` (not `False`) when no benchmark is
+> supplied — see the field table above.
+>
+> **`screen` and `fragile` are not interchangeable, and neither reproduces the accompanying paper's own published
+> `Fragile` column.** That column is a third, distinct fixed rule — `winner_stability < 0.60 OR (reversal AND
+> k*/T < 0.25)` — with a `reversal` gate neither `screen` nor `fragile` has. Applying `screen` naively to the paper's
+> own Table 1 (all 12 curated series) flags **11 of 12**; the paper's own rule flags **7 of 12** on the identical
+> data. Do not expect this package's `screen`/`fragile` output to reproduce a paper's Table-1-style headline count
+> without re-deriving that paper's own specific rule from its `k_star`/`winner_stability`/`reversal` fields directly.
+> `fragile` cannot silently miss a genuine tie: an exact tie is a degenerate margin and always returns
+> `fragile == True`, never `False`. `concentration` is `nan` when there is no strict winner.
 >
 > **`winner_stability` can be `nan`, and that is informative.** When every model's loss is identical to floating point, `degenerate_margin` is `True` and `winner_stability` is `nan` rather than `1.0`. Earlier versions returned `1.0` here, which read as "maximally stable" for a decision that is in fact undefined — the resampled winner never changes only because there is nothing to change. `fragile` is `True` in this case. Guard with `math.isnan(...)` before comparing `winner_stability` to a threshold.
 >
-> **`concentration` is opponent-specific.** It is measured against the *binding* opponent and is therefore the largest value across rivals. Where several opponents tie at the minimum k\*, use `concentration_range` and report an interval: on the reference panel, one cell is `22.19` against one tied opponent and `1.08` against another.
+> **`concentration` is opponent-specific.** It is measured against the *binding* opponent and is therefore the largest value across rivals. Where several opponents tie at the minimum k\*, use `concentration_range` and report an interval: on the accompanying study's own curated panel, one cell (HOUST, MASE) is `9.33` against its most concentrated tied opponent and `1.29` against its least.
 
 ## Honest reporting (recommended)
 
 - **Low power — and not only at small T.** Under the **default** `elimination="studentized"` rule (Hansen–Lunde–Nason's
   published rule, what this package uses unless you say otherwise), the equal-predictive-ability test detected true
-  edges of 2%, 5% and 10% at rates of **0.19**, **0.50** and **0.68**, and a 30% edge 77% of the
-  time. That was on 13 shock-prone macro series with **25–36 evaluation periods each** (median 30), so the shortfall
-  at small edges is not a short-panel artifact: the variance of shock years swamps a few-percent difference in mean
-  accuracy. `|MCS| > 1` can therefore reflect **low power** as much as a genuine tie — read it as *"cannot be
-  distinguished at this sample size,"* never as *"these models are equivalent."* False discovery on a genuinely null
-  panel is **0.007**; sensitivity at small edges is the weak side.
+  edges of 2%, 5% and 10% at rates of **0.19**, **0.47** and **0.68**, and a 30% edge 78% of the
+  time. That was on the 12 curated shock-prone macro series in the accompanying study, with **25–36 evaluation
+  periods each** (median 33), so the shortfall at small edges is not a short-panel artifact: the variance of shock
+  years swamps a few-percent difference in mean accuracy. `|MCS| > 1` can therefore reflect **low power** as much
+  as a genuine tie — read it as *"cannot be distinguished at this sample size,"* never as *"these models are
+  equivalent."* False discovery on a genuinely null panel, averaged over 5 independent seeds (a single-seed
+  estimate at this budget can plausibly differ by roughly 2x), is **0.92%** (0.98% under the raw elimination
+  rule); sensitivity at small edges is the weak side.
 
   **These figures correct an earlier version of this README**, which reported 0.00 at 2%, 5% and 10%. Those came from
   a superseded simulation that re-centred every model to an equal pooled mean before injecting the edge, which made one
   high-variance benchmark impossible to eliminate. They understated this package's capability and must not be quoted.
   Part of the remaining shortfall is arithmetic rather than resolution: restricted to trials where the planted edge
-  actually makes the focal model the pooled best, detection at a 10% edge is **0.87**. See `EVALUATION_CARD.md`
+  actually makes the focal model the pooled best, detection at a 10% edge is **0.89**. See `EVALUATION_CARD.md`
   for the full table.
 - **`|MCS|` is the headline, not the p-value.** The second return value of `model_confidence_set` / `mcs` is
   `p_at_stop` (the p-value at which elimination halted), **not** a calibrated confidence in the set.

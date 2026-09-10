@@ -58,22 +58,25 @@ See the package README table. Headline fields: `mcs` (surviving set), `k_star`, 
   |---|---|
   | 0% | 0.01 (see note: this panel HAS a best model, so this is correct identification) |
   | 2% | **0.19** |
-  | 5% | **0.50** |
+  | 5% | **0.47** |
   | 10% | **0.68** |
-  | 30% | **0.77** |
-  | 50% | **0.82** |
+  | 30% | **0.78** |
+  | 50% | **0.79** |
 
-  Those rates come from 13 shock-prone macroeconomic series with **25–36 annual evaluation periods each** (median 30),
-  not from a handful of periods. **These figures replace an earlier table that reported 0.00 at every edge up to
-  10%.** That table came from a superseded simulation design which re-centred all six models to an exactly equal
-  pooled mean before injecting the edge, making one high-variance benchmark structurally uneliminable; the accompanying
-  study documents the error and its correction. The corrected design leaves the panel uncentered. A separate
-  false-discovery rate, measured on genuinely null i.i.d. panels where no model is better, is **0.007**.
+  Those rates come from the 12 curated shock-prone macroeconomic series in the accompanying study, with
+  **25–36 annual evaluation periods each** (median 33), not from a handful of periods. **These figures replace an
+  earlier table that reported 0.00 at every edge up to 10%.** That table came from a superseded simulation design
+  which re-centred all six models to an exactly equal pooled mean before injecting the edge, making one
+  high-variance benchmark structurally uneliminable; the accompanying study documents the error and its
+  correction. The corrected design leaves the panel uncentered. A separate false-discovery rate, measured on
+  genuinely null i.i.d. panels where no model is better and averaged over 5 independent seeds (a single-seed
+  estimate at this budget can plausibly differ by roughly 2x -- an earlier single-seed figure of 0.007 undershot
+  this by about that much), is **0.0092** (0.0098 under the raw elimination rule).
 
   Read the small-edge rows with their arithmetic ceiling in mind: an edge handed to a model already well behind does
   not make it the best model, and no test could single it out. Restricted to trials where the planted edge actually
-  does make the focal model the pooled best, detection at a 10% edge is **0.87** rather than 0.68,
-  and at 2% it is **0.38** rather than 0.19. The remaining shortfall is the variance of shock years:
+  does make the focal model the pooled best, detection at a 10% edge is **0.89** rather than 0.68,
+  and at 2% it is **0.39** rather than 0.19. The remaining shortfall is the variance of shock years:
   a single 2020-sized cliff swamps a few-percent difference in mean accuracy.
 
   So a large tied set (`|MCS| > 1`) can reflect **low power** as much as a genuine tie. Report non-identification as
@@ -81,18 +84,19 @@ See the package README table. Headline fields: `mcs` (surviving set), `k_star`, 
   well-powered negative. Specificity is the property this test genuinely has; sensitivity is not.
 - The MCS elimination step defaults to Hansen-Lunde-Nason's published studentized (e_max) statistic; pass
   `elimination="raw"` to recover the pre-2026-07-27 raw-mean simplification, which gives identical tied sets on
-  every one of the 13 curated series in the accompanying study. Cross-checked against an independent MCS
-  implementation (`arch`): the identified/non-identified verdict agrees on all 13 series; exact tied-set
-  cardinality agrees on 11 of 13. Cross-check against an independent MCS implementation for your own headline
-  claims too.
+  every one of the 12 curated series in the accompanying study. Cross-checked against an independent MCS
+  implementation (`arch`): the identified/non-identified verdict agrees on all 12 series; exact tied-set
+  cardinality agrees on 10 of 12 (the two disagreements each differ by exactly one model and remain
+  non-identified under either implementation). Cross-check against an independent MCS implementation for your
+  own headline claims too.
 - Results are conditional on the evaluation window, metric, aggregation, and data vintage — these are axes of the
   decision, not nuisance parameters. Report across them where feasible.
 - k\* is a *deletion*-based robustness quantity; it answers "how few periods flip the winner," not "which model
   generalizes best out of sample."
 - The classical-tier fits underlying the benchmark (chiefly the SARIMA and DHR state-space models) do not converge
   cleanly on every window — the frozen forecasts were generated with a substantial rate of MLE non-convergence
-  warnings from `statsmodels`, visible in the committed `*_run.log` files. This affects the crowned model in 5 of
-  the 13 series in the paper's Table 1 (those whose best model is `sarima` or `dhr`). It does not change any
+  warnings from `statsmodels`, visible in the committed `*_run.log` files. This affects the crowned model in 4 of
+  the 12 series in the paper's Table 1 (those whose best model is `sarima` or `dhr`). It does not change any
   reported number — the forecasts are what they are regardless of the optimizer's convergence flag — but a
   practitioner adapting this pipeline to new data should not assume every fit converges cleanly, and should not
   suppress solver warnings globally without checking them at least once.
@@ -117,7 +121,19 @@ The diagnostics are deterministic given a seed. **For this package specifically*
 2026-09-07** (round-4 8-lens PyPI-preflight audit) — this section previously said "the 379-test
 suite," a number that had drifted from CHANGELOG.md's own last-recorded count (465, as of round 10)
 and from the real current count alike, with no CHANGELOG entry at all for the work done between
-them. The real, current count (`pytest tests/`, verified directly) is **541 passed, 1 xfailed**.
+them. **CORRECTED AGAIN 2026-09-09** (round-2 stress-review, cross_doc_final lens): 541 had itself
+gone stale after the v1.0.1 doc-sync fixes (commit 146d72b) added two new test-suite meta-checks.
+**CORRECTED A THIRD TIME 2026-09-09** (round-5 stress-review): 543 had itself gone stale after v1.0.3
+added six new regression tests (three for round-5's own new bug fixes, two replacing a pair of
+vacuous near-tie tests an independent review found, and one for the `report()` LEADERBOARD fix).
+**CORRECTED A FOURTH TIME 2026-09-10** (round-6 10-lens pre-publish due-diligence review): 548 had
+itself gone stale after five more regression tests landed for that round's own CLI/resource-
+exhaustion/validation/API-alias fixes (still under the same unpublished `[1.0.3]`, not a new bump).
+**CORRECTED A FIFTH TIME 2026-09-10** (round-7, the final pre-publish review before v1.0.3 actually
+ships): 553 had itself gone stale after three more regression tests landed for that round's own CLI-
+encoding, unpivoted-long-frame-warning, and ragged-array fixes. This is the number that ships with
+v1.0.3 -- no further review round is planned after this one.
+The real, current count (`pytest tests/`, verified directly) is **556 passed, 1 xfailed**.
 It includes golden-value regression tests locking down `k_star`, MCS survivor sets, and every
 headline statistic against known-correct fixtures, and (as noted above) the MCS implementation is
 independently cross-checked against `arch`'s. There is also a CI matrix
@@ -140,9 +156,10 @@ file exists in the repository**; this was aspirational text for gate infrastruct
 description of something that regressed. Removed here rather than left as a dead claim a reader can't verify; the
 input-freezing/hashing story for the paper's own reproduction pipeline remains open work.
 
-Please cite both the accompanying paper and this software. The citation metadata, including the DOI once minted,
-lives in **`CITATION.cff`**. A note on Zenodo's convention, for whenever a deposit is made (**no `.zenodo.json`
-exists in this repository today** — this package is not yet released to Zenodo): `.zenodo.json` is deposit *input*
-metadata and never carries the minted DOI back, so `CITATION.cff` — not `.zenodo.json` — is the file to check. When
-recording which snapshot produced a specific result, cite the **version** DOI rather than the concept DOI; the
-concept DOI always resolves to the latest release.
+Please cite both the accompanying paper and this software. The citation metadata, including the minted DOI,
+lives in **`CITATION.cff`**. A note on Zenodo's convention (the deposit is live as of 2026-09-08, DOI
+`10.5281/zenodo.22652327`, confirmed directly against the record rather than assumed): this repository's
+`.zenodo.json` does not exist, and none is needed for an already-minted deposit — `.zenodo.json` is deposit
+*input* metadata used to configure a deposit before it is made and never carries the minted DOI back, so
+`CITATION.cff` — not `.zenodo.json` — remains the file to check. When recording which snapshot produced a specific result, cite the **version** DOI rather than the
+concept DOI; the concept DOI always resolves to the latest release.

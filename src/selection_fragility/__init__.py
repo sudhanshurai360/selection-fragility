@@ -52,7 +52,7 @@ from .pivot import concentration_share, pivot_agreement                 # Stage 
 from .compare import compare, ChangeReport                              # Stage 5
 from .report import report                                              # Stage 6
 
-__version__ = "1.0.0"
+__version__ = "1.0.3"
 
 __all__ = [
     # instrument

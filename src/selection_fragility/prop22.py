@@ -5,7 +5,16 @@ k* itself is untouched from `fragility.py` -- exact, brute-force-verified, the r
 added here is a reframing: `|t| <= sqrt(Tk/(T-k))` inverts to `k >= T*z^2/(T+z^2)`, a k*<=threshold
 certificate of non-significance at the given z, with ZERO simulation. For any T>=14 this threshold is
 flat at 3. This is a DESCRIPTIVE INFLUENCE MEASURE (like Cook's distance), never a test in the
-hypothesis-testing sense -- it only ever certifies non-significance, never certifies significance."""
+hypothesis-testing sense -- it only ever certifies non-significance, never certifies significance.
+
+WHY `z` HERE, NOT `alpha` LIKE THE REST OF THE PACKAGE (NOTED 2026-09-10, round-6 stress-review,
+api_consistency lens): every other significance-level parameter in this package is `alpha` (a
+bootstrap-based p-value threshold, e.g. `mcs()`/`resolution_report()`). This module's certificate is
+a CLOSED-FORM Gaussian critical value with no bootstrap involved, so `z` (e.g. 1.96 for two-sided 5%)
+is the natural parameter, not a p-value to compare against one. `z = scipy.stats.norm.ppf(1 -
+alpha/2)` converts a two-sided alpha to the equivalent z if you want to think in the rest of the
+package's vocabulary; this module does not do that conversion for you since it would add a scipy
+dependency this module deliberately avoids (numpy-only, matching mcs.py's own design note)."""
 import math
 import numpy as np
 from .fragility import _as_loss_dict, _validate_losses, pooled_winner, breakdown_number, _unwrap_panel
@@ -52,8 +61,8 @@ def certified_tied_subset(L, w=None, z=1.96):
     documented, supported feature elsewhere in this package) and thread it straight into a WEIGHTED
     breakdown_number(), then certify that weighted k* using prop22_certifies()'s threshold -- which
     is only proved for the UNWEIGHTED i.i.d. population-sd statistic (see _prop22_threshold's own
-    derivation, and code/pipeline/realised_t.py in the companion paper repo, which always calls
-    breakdown_number with equal weights when validating this exact bound). Adversarial search found
+    derivation; the companion paper's own validation of this exact bound always calls
+    breakdown_number with equal weights, for the same reason). Adversarial search found
     0.30% of random weighted panels produced a FALSE certification -- a genuinely significant gap
     (|t| up to 3.32) certified "non-significant". A uniform weight vector (all entries equal,
     including the w=None default) is still fully supported: rescaling every period by the same

@@ -6,7 +6,7 @@ week -- is that signal or noise?"
 import numpy as np
 
 from .fragility import _validate_losses, pooled_winner, decision_breakdown
-from .identify import mcs_size, _run_mcs
+from .identify import _run_mcs, _validate_alpha
 
 
 class ChangeReport:
@@ -103,9 +103,21 @@ def _churn_base_rate(L, w, n_perm=400, seed=0):
     # performed and no error raised.
     if n_perm <= 0:
         raise ValueError(f"n_perm must be a positive integer; got {n_perm}.")
+    # FIXED 2026-09-09 (round-2 stress-review, tool_source_audit lens, CONFIRMED with measured
+    # impact): both champion picks below used to be a bare np.argmin(np.average(...)), with NO
+    # degenerate-tie floor -- unlike pooled_winner() (fragility.py), which every OTHER champion
+    # determination in this package goes through, including compare()'s own curr_champ/prev_champ
+    # that this function's result is supposed to describe. On a near-tied panel (means differing by
+    # ~5e-15, well inside pooled_winner's _MARGIN_REL_FLOOR=1e-12), the raw argmin can pick a
+    # DIFFERENT model than pooled_winner's name-sorted tie-break -- reproduced directly: compare()
+    # reported current_champion='a' while this function's un-floored argmin internally tracked
+    # champion 'z', and churn_base_rate came out 0.029 (reads as very stable) when the rate computed
+    # against the ACTUALLY-reported champion 'a' was 0.97 (the opposite conclusion), same call, same
+    # data. Now routes both picks through pooled_winner() so this function's internal champion
+    # notion always agrees with the one compare() reports to the caller.
     models = sorted(L)
     M = np.column_stack([np.asarray(L[m], float) for m in models])   # T x K, REAL unmodified data
-    obs_champ_idx = int(np.argmin(np.average(M, axis=0, weights=w)))
+    obs_champ_idx = models.index(pooled_winner({m: M[:, i] for i, m in enumerate(models)}, w))
     rng = np.random.default_rng(seed)
     T = M.shape[0]
     mean_w = float(np.mean(w))
@@ -115,7 +127,7 @@ def _churn_base_rate(L, w, n_perm=400, seed=0):
         new_period = rng.permutation(M[t_star])   # same values as a real period, random model assignment
         Mp = np.vstack([M, new_period])
         wp = np.append(w, mean_w)
-        perm_champ_idx = int(np.argmin(np.average(Mp, axis=0, weights=wp)))
+        perm_champ_idx = models.index(pooled_winner({m: Mp[:, i] for i, m in enumerate(models)}, wp))
         if perm_champ_idx != obs_champ_idx:
             changes += 1
     return changes / n_perm
@@ -157,6 +169,16 @@ def compare(previous, current, *, alpha=0.10, n_perm=400, seed=0):
                 f"compare() expects two LossPanel objects, got {type(_p).__name__} for {_name!r}. "
                 f"Build one first with LossPanel.from_losses(...) or LossPanel.from_forecasts(...)."
             )
+    # FIXED 2026-09-10 (round-6 stress-review, cli_end_to_end lens): an invalid `alpha` (e.g. the
+    # "meant 10%" slip alpha=10, or a negative/nan value) used to reach _run_mcs() -> _validate_alpha
+    # further down inside the try/except below, which exists ONLY to catch a different, legitimate
+    # case (a non-uniform curr_w with no native MCS support). That broad `except ValueError` caught
+    # this ValueError identically, silently classified it as "MCS undetermined", and forced
+    # act=False -- so a real champion change combined with a malformed --alpha still exited 0 under
+    # `--exit-code`, the flag whose entire purpose is failing CI on a real change. Validating alpha
+    # here, before that try/except, lets it raise immediately and reach __main__.py's existing
+    # ValueError -> exit 2 handling, exactly like every other bad-input path.
+    _validate_alpha(alpha)
     if set(previous.models) != set(current.models):
         raise ValueError(
             f"previous and current panels have different model sets -- cannot compare mismatched "
@@ -247,9 +269,15 @@ def compare(previous, current, *, alpha=0.10, n_perm=400, seed=0):
     # ValueError propagate raw and uncaught. Caught here the same way, undetermined not silently
     # False, and `.act` is forced False so a CI/pipeline promotion step never treats "couldn't
     # compute" as "genuinely left the MCS."
+    # FIXED 2026-09-09 (round-2 stress-review, tool_source_audit lens): this block used to call
+    # mcs_size(curr_L, ...) as a bare, discarded statement immediately before _run_mcs(curr_L, ...)
+    # with IDENTICAL arguments -- mcs_size() is itself just len(_run_mcs(...).included)
+    # (identify.py), so that ran the full arch.bootstrap.MCS elimination twice per compare() call
+    # for no reason (confirmed by timing: ~2x a single _run_mcs() call). The ValueError this try/
+    # except exists to catch (a non-uniform curr_w with no native MCS support) is raised identically
+    # by _run_mcs() alone, so removing the redundant call changes no behavior.
     mcs_error = None
     try:
-        mcs_size(curr_L, alpha=alpha, seed=seed, w=curr_w)
         m = _run_mcs(curr_L, alpha=alpha, seed=seed, w=curr_w)
         old_champion_still_in_mcs = prev_champ in set(m.included)
     except ValueError as e:

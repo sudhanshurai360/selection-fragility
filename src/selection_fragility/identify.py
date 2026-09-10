@@ -39,6 +39,18 @@ def _validate_alpha(alpha):
 
 
 def _to_frame(L):
+    # FIXED 2026-09-10 (round-6 stress-review, error_message_quality lens): with no dict-like check
+    # first, a plain list slipped past `len(L) < 2` and then `sorted(L)`/`L[m]` below silently
+    # reinterpreted the list's VALUES as if they were dict keys -- `identified([1,2,3])` did not
+    # raise cleanly, it raised "model '1' loss must be a non-empty 1-D array; got shape ()", falsely
+    # implying a real model named '1' was passed. Same fix as fragility.py's _validate_losses.
+    if not hasattr(L, "items"):
+        raise TypeError(
+            f"L must be a {{model: array}} dict (or a LossPanel's own .losses attribute); got "
+            f"{type(L).__name__}. Build a LossPanel first with LossPanel.from_losses(...) if you "
+            f"have a DataFrame/ndarray, or pass panel.losses/panel.weights directly for this "
+            f"raw-array entry point."
+        )
     if len(L) < 2:
         raise ValueError(f"need at least 2 models to compute a Model Confidence Set; got {len(L)}.")
     # CONFIRMED REGRESSION (independent 'wild' review, 2026-08-16): the internal tie-breaking jitter
@@ -155,12 +167,20 @@ def _col_seed(a: np.ndarray) -> int:
 def _run_mcs(L, alpha=0.10, reps=500, block_size=3, seed=0, w=None):
     _validate_alpha(alpha)
     _validate_mcs_weights(w)
+    # FIXED 2026-09-10 (round-6 stress-review, error_message_quality lens): these two messages used
+    # to prefix themselves with "_run_mcs():", a private, underscore-prefixed helper -- but reps/
+    # block_size are parameters of the PUBLIC entry points (identified()/mcs_size()) that actually
+    # reach this validation; a user grepping their own code for "_run_mcs" after seeing the message
+    # would find nothing. Named the public functions instead. Also rephrased into the conditional
+    # tense ("would run" not "ran") -- the past tense read as if the zero-replication run had
+    # already happened and returned a result, when this guard exists specifically to raise BEFORE
+    # that happens.
     if int(reps) < 1:
-        raise ValueError(f"_run_mcs(): reps must be a positive integer; got {reps}. A non-positive "
-                          f"reps ran zero bootstrap replications and returned an all-included set "
-                          f"with no resampling ever performed.")
+        raise ValueError(f"identified()/mcs_size(): reps must be a positive integer; got {reps}. A "
+                          f"non-positive reps would run zero bootstrap replications and silently "
+                          f"return an all-included set with no resampling ever performed.")
     if int(block_size) < 1:
-        raise ValueError(f"_run_mcs(): block_size must be a positive integer; got {block_size}.")
+        raise ValueError(f"identified()/mcs_size(): block_size must be a positive integer; got {block_size}.")
     df = _to_frame(L)
     models = list(df.columns)
     # arch's MCS (both method='R', the default, and method='max') divides each pairwise mean-loss

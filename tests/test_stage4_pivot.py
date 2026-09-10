@@ -355,3 +355,31 @@ class TestFlaggedCellsBenchmark:
             f"only {n_confirmed} of {len(flagged)} previously-flagged cells reproduce as unstable "
             f"against the corrected 0.518 benchmark -- expected at least HOUST/rmsse to still confirm"
         )
+
+
+class TestPivotOpponentWeightScaleInvariance:
+    """FIXED 2026-09-10 (structural post-publish audit -- a fifth independent instance of the
+    "champion pick via raw, un-floored float comparison" bug class already found and fixed four
+    times elsewhere in this package). `_champ_opp_contributions`'s opponent tie-break
+    (`M > best_M`, module-private, exercised here only through concentration_share/pivot_agreement)
+    picked among decision_breakdown's tied opponents by total margin M, computed via `c.sum()` --
+    order-dependent floating-point summation. Two opponents whose per-period contributions are
+    PERMUTATIONS of each other are mathematically tied on M by construction, but numpy's summation
+    gave different float64 rounding for the two orderings, and multiplying the weight vector by a
+    scalar (a documented no-op) changed which ordering artifact appeared, flipping which opponent
+    (and therefore which pivotal period / concentration_share value) was named. Fixed via
+    `math.fsum` (provably order-invariant), NOT a relative floor + name-based fallback -- a floor
+    here would have reopened the exact rename-dependence bug TestPivotRenameInvariance above exists
+    to prevent."""
+
+    def test_permutation_tied_opponents_give_scale_invariant_pick(self):
+        from selection_fragility.pivot import _champ_opp_contributions
+        a = np.array([0.0, 0.0, 0.0, 0.0])
+        y = np.array([1.0, 2.0, 3.0, 4.125])
+        z = np.array([4.125, 3.0, 2.0, 1.0])   # a permutation of y -> mathematically tied M
+        L = {"a": a, "y": y, "z": z}
+        picks = set()
+        for scale in (1e-12, 1e-9, 1e-6, 1e-3, 1.0, 1e3, 1e6, 1e9):
+            _champ, opp, _c = _champ_opp_contributions(L, np.ones(4) * scale)
+            picks.add(opp)
+        assert len(picks) == 1, f"opponent pick flipped across weight scales: {picks}"

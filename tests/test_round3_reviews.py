@@ -16,7 +16,7 @@ import pytest
 from selection_fragility import LossPanel, compare, model_confidence_set
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-REPO_ROOT = ROOT.parent.parent  # Paper3_UIClaims_Forecasting/ -- some docs reference paths there
+REPO_ROOT = ROOT.parent.parent  # this package's parent project (during development) -- some docs reference paths there
 
 
 # ---- 1. performance-regression guard (M-competition-veteran finding) --------------------------

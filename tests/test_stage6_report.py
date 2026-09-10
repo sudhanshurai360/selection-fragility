@@ -313,6 +313,34 @@ class TestReportMcsDedup:
             assert (expected_flag == "in") == ("in MCS" in lines[model]), \
                 f"{model}: expected {'in MCS' if expected_flag=='in' else 'excluded'}, got: {lines[model]}"
 
+    def test_leaderboard_disambiguates_whitespace_colliding_model_names(self):
+        """FIXED 2026-09-09 (round-5 stress-review, edge_case_fuzz lens): two model names differing
+        only in whitespace (e.g. 'ar1' vs 'ar1 ') pass LossPanel's exact-string duplicate check as
+        legitimately distinct models, but f"{mm:<15}" left-justify padding absorbed the difference,
+        so both LEADERBOARD rows printed under a byte-identical label with no way for a reader to
+        tell which line is which. Now the colliding names print via repr() instead."""
+        rng = np.random.default_rng(0)
+        df_data = {"ar1": rng.normal(size=20), "ar1 ": rng.normal(size=20)}
+        import pandas as pd
+        panel = LossPanel.from_losses(pd.DataFrame(df_data))
+        out = report(panel)
+        board = out.split("LEADERBOARD")[1].split("RESOLUTION")[0]
+        rows = [ln for ln in board.splitlines() if ln.strip().startswith(("'ar1", "ar1"))]
+        assert len(rows) == 2
+        assert rows[0] != rows[1]
+        assert "'ar1'" in board and "'ar1 '" in board
+
+    def test_leaderboard_non_colliding_names_unaffected_by_disambiguation(self, random_panel):
+        """Regression guard for the fix above: a report with no whitespace-collision must render
+        exactly as it did before the fix (plain names, no repr() quoting)."""
+        L = random_panel(seed=0, T=20, K=3)
+        panel = LossPanel.from_losses(L)
+        out = report(panel)
+        board = out.split("LEADERBOARD")[1].split("RESOLUTION")[0]
+        for model in L:
+            assert f"  {model:<15} mean=" in board
+            assert repr(model) not in board
+
     def test_report_speed_improved_at_moderate_k(self):
         """RELATIVE, not absolute, timing check (closes a real gap found by this fix's own
         independent reviewer: an earlier version used a fixed 15s ceiling at K=80, which a naive

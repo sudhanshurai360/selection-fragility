@@ -3,7 +3,226 @@
 All notable changes to `selection-fragility` are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## [1.0.0] — unreleased
+## [1.0.3] — 2026-09-09
+
+### Fixed — 2026-09-10, a structural audit finds a fifth instance, then closes the pattern for good
+
+Prompted by an external second opinion (an independent review of this whole remediation history),
+which flagged that the champion-floor bug being found FOUR separate times across three rounds was
+"not four unrelated bugs — one architectural weakness" and recommended a dedicated structural audit
+rather than trusting the next reviewer to catch a fifth instance by luck.
+That audit found one: **`pivot.py`'s `_champ_opp_contributions`** picked among decision_breakdown's
+tied opponents by total margin `M`, computed via `c.sum()` — order-dependent floating-point
+summation. Two opponents whose per-period contributions are exact PERMUTATIONS of each other are
+mathematically tied on `M` by construction, but numpy's pairwise summation gave different float64
+rounding for the two orderings, and a weight-scale rescaling (a documented no-op) changed which
+ordering artifact appeared, flipping which opponent — and therefore which pivotal period /
+`concentration_share` value — got named. A relative-floor-plus-name-fallback (the fix used the prior
+four times) was deliberately NOT used here: this function's own docstring explicitly rejects a
+name-based tie-break, because that reintroduces the exact rename-dependence bug
+`TestPivotRenameInvariance` exists to prevent. Fixed instead with `math.fsum` (Shewchuk's algorithm),
+which is provably order-invariant — permutation-tied inputs now sum to the bit-identical float
+regardless of scale, fixing the root cause rather than adding a threshold around it.
+
+The rest of the audit (every `min`/`max`/`argmin`/`argmax` site across the package) found no further
+instances: `decision_breakdown`'s own tie-break compares an exact INTEGER k* (no float-summation
+risk); `per_period_winner`/`report()`'s win-counting and every "which period is the largest single
+contributor" `argmax` compare individual array elements directly, not summed aggregates (scale-
+invariant for positive scale by construction, no accumulation-order ambiguity); `mcs()`'s own
+elimination rule is HLN's published, already-studentized statistic and takes no weight parameter at
+all, so the bug's precondition (a rescalable weight vector) does not exist there. Documented inline
+at each site so a future change doesn't have to re-derive this reasoning.
+
+### Fixed — a third and fourth instance of the same champion-floor bug class
+
+Round-5 stress-review (`champion_pattern_hunt` lens, a dedicated systematic sweep of every source
+file for this exact pattern after it was found independently twice before today): two more internal
+"champion pick" comparisons that bypassed `pooled_winner()`'s degenerate-tie floor.
+
+- **`resolution.py`'s `_binding_rival`** picked the rival closest to the champion via a raw
+  `abs(means[m] - means[champ])` comparison with only a sorted-name tie-break for *exact* ties, no
+  relative floor for *near*-ties. Measured directly: a uniform weight rescaling (`w -> w*1e-6`, a
+  documented no-op for `np.average`'s ratio) flipped which rival was named "binding," moved
+  `significance_boundary` by 73%, and flipped the headline `resolved` verdict itself on unchanged
+  data. This is the third confirmed instance of this bug class (after `compare.py`'s
+  `_churn_base_rate` and `resolution.py`'s own `selection_regret`, both fixed in `[1.0.2]`) and the
+  most consequential — it can flip RESOLUTION's own refusal-rule verdict. Fixed with a floor matching
+  `pooled_winner()`'s own (not the module's `_pair_scale`, which carries a `mean(w)` term appropriate
+  for raw un-normalized margins, not for `np.average`-computed ratios — an intermediate fix attempt
+  using `_pair_scale` was caught still flipping under the same repro before landing this one).
+- **`fragility()`'s `pooled_runner_up`** field had the identical raw-min pattern; fixed by routing
+  through `pooled_winner()` on the remaining (non-champion) models, with a guard for the case where
+  only one non-champion model remains (`pooled_winner()` itself requires >=2 models).
+- **`report()`'s LEADERBOARD** printed two models under a byte-identical label when their names
+  differed only in trailing/internal whitespace (e.g. `'ar1'` vs `'ar1 '`) — `f"{mm:<15}"` padding
+  absorbed the difference. Same "distinct data renders as an indistinguishable duplicate" bug class
+  already fixed for PIVOT's period labels; extended to model names (colliding names now print via
+  `repr()`; non-colliding reports are byte-identical to before).
+- Added regression tests for all three fixes above, plus for the two `[1.0.2]` fixes that shipped
+  without dedicated tests (`_churn_base_rate`, `selection_regret`) — an independent review of this
+  fix found the first attempt at these two tests were *vacuous* (they hand-built a near-tied panel
+  where the champion identity disagreed but, coincidentally, the held-out-period loss values were
+  identical either way, so the asserted output never actually changed); replaced with monkeypatch-
+  based wiring checks that force a deliberately wrong `pooled_winner` and confirm the reported value
+  changes.
+- `code/gates/differential_test.py`'s `KNOWN_DIVERGENT` extended to disclose that the frozen pipeline
+  copy (`code/instrument/fragility.py`, intentionally unfixed — the historical record behind every
+  published number) can now diverge from the package on `pooled_runner_up` for a near-tied panel.
+
+### Fixed — 2026-09-10, 10-lens pre-publish due-diligence round (still `[1.0.3]`, not yet published)
+
+Not a new version bump: the round above already moved this repo's local state to 1.0.3 without ever
+publishing it, so this round's fixes accumulate into the same entry per this project's own practice
+of publishing once, not once per internal batch (see `[1.0.1]`/`[1.0.2]`'s own history below for why
+that convention exists). All 21 findings from a dedicated 10-lens tool-only review were confirmed
+real; fixed here.
+
+- **CLI: an invalid `--alpha` silently defeated `--exit-code`'s entire purpose.** `compare()`'s
+  broad `except ValueError` (added for a *different*, legitimate case — non-uniform weights
+  unsupported by `arch.bootstrap.MCS`) also caught `_validate_alpha`'s error for a malformed
+  `--alpha` (the classic "meant 10%" slip, or `nan`/negative), silently classified it as "MCS
+  undetermined," and forced `.act = False` — so a real champion change combined with a broken
+  `--alpha` still exited 0 under `--exit-code`, the flag whose sole purpose is failing CI on a real
+  change. Alpha is now validated before that try/except.
+- **CLI: only `FileNotFoundError` was caught, not its `OSError` siblings.** Pointing `compare` at a
+  directory (`IsADirectoryError`) or an unreadable file (`PermissionError`, plausible under a CI
+  runner's restrictive permissions) raised a raw traceback at exit 1 — the SAME code `--exit-code`
+  uses to mean "act on this." Now catches `OSError` directly (`FileNotFoundError`'s own base class).
+- **`dist/` held stale, never-published v1.0.1 build artifacts** that a naive `twine upload dist/*`
+  would have shipped instead of v1.0.3, silently publishing an old, unreviewed version. Cleaned;
+  rebuilt fresh immediately before any future publish step.
+- **No bound on period count (T) let an ordinary-looking large input exhaust minutes of runtime and
+  multiple GB of memory with zero warning** — `K` (model count) got exactly this treatment in an
+  earlier round, `T` never did, despite `mcs()`'s own bootstrap cost scaling with `T*B`. Now warns
+  (not a hard error — large T is a legitimate use case) past `T*B > 20,000,000`.
+- **Input validation gaps let realistic mistakes escape as raw, unhelpful Python errors** — passing
+  a non-dict `L` (a list, string, `None`) or malformed `w`/`weights` (a dict, a bad string) bypassed
+  every domain-specific validation this package otherwise applies everywhere else, surfacing as raw
+  `AttributeError`/`TypeError`/`ValueError` naming neither the argument nor the calling function.
+  Worst case: `identified([1,2,3])` did not raise cleanly at all — it silently reinterpreted the
+  list's VALUES as if they were dict keys, producing a message that falsely implied a real model
+  named `'1'` was passed. Added clear, consistent `TypeError`s across the raw-array entry points
+  (`fragility.py`, `identify.py`, `panel.py`).
+- **`report()`'s own docstring and README.md falsely claimed cost "scales fine even to T=5000."**
+  False for a panel that reaches a RESOLVED verdict and contains a decisively-separated pair (an
+  everyday shape) — measured directly: 10.8-16.1s at a modest K=20, T=20,000 once resolved, with
+  zero warning (K=20 is under the K>100 warning threshold). Corrected in `report.py`, `README.md`,
+  and `panel.py`'s own K-count warning text; no algorithmic change made under publish-deadline
+  pressure — the documentation was wrong, not (necessarily) the code, and fixing an O(T) greedy loop
+  correctly deserves its own dedicated, unhurried pass.
+- **`selection_regret(L, weights=None)` was the only function in its module not named `w=`** — every
+  sibling (`minimum_detectable_edge`, `significance_boundary`, `mcb_bound`, `resolution_report`)
+  accepts `w=`; a caller moving between them got a raw `TypeError`. `weights=` is kept as the
+  primary/positional name (published in v1.0.0; a patch release must not break it) — `w=` added as a
+  purely additive keyword-only alias.
+- **`resolution_report()`'s returned dict never named the champion**, only the rival — added a
+  `"champion"` key (purely additive).
+- **`binding_opponent` (fragility.py, fewest-deletions criterion) and `binding_rival` (resolution.py,
+  closest-mean criterion) are different selection rules that can name different models on the same
+  panel** (18.25% disagreement measured across 20,000 random panels) — documented explicitly in both
+  docstrings rather than renamed, to avoid a breaking API change.
+- Smaller error-message and packaging cleanups: consistent `type(x).__name__` formatting, a private
+  helper's name no longer leaks into public-API errors, a confusing past-tense guard message
+  rephrased, an unreachable dead-code check removed from `mcb_bound()`, `KeyError` standardized to
+  `ValueError` for `from_forecasts()`'s "column not found" cases, a `Development Status :: 4 - Beta`
+  trove classifier added, and cross-referencing docstring notes added where two functions
+  legitimately use different conventions (`alpha` vs `z` in `prop22.py`; the MCS family's alpha
+  default of 0.10 vs the resolution family's 0.05).
+- Five new regression tests added (`test_stage5_compare.py`, `test_security_adversarial.py`,
+  `test_stage2_resolution.py`) for the CLI, resource-exhaustion, validation, and API-alias fixes
+  above — an independent review reverted three of them one at a time and confirmed each new test
+  fails exactly as expected against the pre-fix code, not just passes against the post-fix code.
+
+### Fixed — 2026-09-10, round 7, the final pre-publish review before v1.0.3 actually ships
+
+Still `[1.0.3]`, not a new bump, same reasoning as round 6 above. A 10-lens tool-only round with no
+further review planned after it — 6 raw findings, 5 confirmed real, 1 not real (the smallest,
+tightest batch of any round today, consistent with genuinely diminishing severity rather than an
+open-ended search).
+
+- **`from_forecasts()` silently misinterpreted an unpivoted long/tidy frame as a valid panel** when
+  `group=None` — the single most natural mistake in this documented API. Reproduced on real project
+  data (`multiseries/results/breadth_distinct/breadth_distinct_predictions.csv`): auto-inference
+  crowned a leftover calendar-year column, the raw prediction column, and three precomputed
+  error/scale columns as "6 competing models," pooling every real model's rows together within each
+  period, and `report()` printed a fully confident VERDICT over nonsense columns — zero warnings.
+  The existing duplicate-(period,group) guard is deliberately scoped to skip `group=None` (a
+  legitimate shape on its own), so it structurally could not catch this. Added a differently-scoped
+  warning, keyed on rows repeating within a period (a genuinely wide frame has exactly one row per
+  period) rather than on `group=None` alone, so it does not fire on the common, correct case.
+- **The CLI crashed with an unhandled `UnicodeEncodeError`**, not the documented exit code, when a
+  model/label name has characters outside stdout's codepage (CJK, emoji) and stdout isn't UTF-8 —
+  the DEFAULT on Windows once output is redirected/piped, exactly the CI-capture scenario
+  `python -m selection_fragility compare` exists for. Exit 1 with a raw traceback, the same ambiguity
+  round-2/round-6's fixes specifically eliminated for every other failure path. `sys.stdout`
+  is now reconfigured (`errors="backslashreplace"`) so an out-of-codepage name degrades to a
+  readable escaped form instead of crashing.
+- **A ragged (jagged) nested list for a model's loss array leaked a raw numpy error** instead of
+  this package's usual clear, model-attributed message — reachable via `LossPanel.load()` on a
+  tampered/malformed saved panel file. The sibling `weights=` path was already protected against the
+  identical shape; `from_losses()`'s per-model loop now is too.
+- Two stale-number touch-ups this round's own version-metadata sweep caught: `pyproject.toml`'s
+  classifier-justification comment (548 → current test count) and `this_project_readme.md`'s
+  file-map table (`__version__` still listed as `"1.0.1"`).
+- Three new regression tests added (`test_stage0_losspanel.py`, `test_stage5_compare.py`) for the
+  long-frame warning, the CLI encoding fix, and the ragged-array message.
+
+## [1.0.2] — 2026-09-09
+
+**CORRECTED 2026-09-09** (round-4 stress-review, rounding_sensitivity lens): this version did not
+originally exist as its own entry -- two more commits (`f1a0fae`, `f8a3fce`) landed real,
+behavior-changing bug fixes under the *same* `1.0.1` version label the doc-only entry below already
+used, so `[1.0.1]`'s own "No code/behavior changes" claim had gone false under later commits sharing
+its version number. Split out here as a genuine patch bump, per this project's own practice of a
+version bump per real change (the `1.0.0 -> 1.0.1` bump below was itself exactly that).
+
+### Fixed — two real correctness bugs, both the same class, found by two different stress-review rounds
+
+- **`compare()` ran the full `arch.bootstrap.MCS` elimination twice per call** (a discarded
+  `mcs_size()` call immediately before an identical `_run_mcs()` call) -- a pure performance bug, no
+  wrong answers, but ~2x the necessary cost per call.
+- **`_churn_base_rate()` (inside `compare()`) and `selection_regret()` both picked their internal
+  "champion" via a raw, un-floored comparison**, bypassing `pooled_winner()`'s documented
+  degenerate-tie floor that every other champion determination in this package goes through. On a
+  near-tied panel this could silently disagree with the champion `compare()`/`resolution_report()`
+  actually report to the caller -- measured directly on one such panel: `churn_base_rate` read 0.029
+  ("very stable") keyed to an internally-tracked champion different from the one
+  `ChangeReport.current_champion` named, versus 0.97 ("very unstable") keyed to the champion actually
+  reported. Both now route through `pooled_winner()`.
+- `fragility()`'s local `_pair_scale()` closure, duplicating the module-level function of the same
+  name, removed (no behavior change, confirmed identical logic).
+- Refreshed every stale "13 curated series" figure found across `mcs.py`'s own module docstring,
+  `README.md`, and `EVALUATION_CARD.md` (detection rates, false-discovery rate, arch cross-check
+  count, the winner_stability-below-threshold callout, the concentration_range example, and the
+  evaluation-period median) against the current 12-series panel and current `canonical.json` values,
+  independently re-derived, not just relabeled.
+- `CONTRIBUTING.md` no longer describes the repository as private.
+
+## [1.0.1] — 2026-09-09
+
+### Fixed — post-release doc-sync gaps, found by a fresh adopter-POV review of the shipped v1.0.0
+
+No code/behavior changes; documentation only, and no `.zenodo.json` involved (see the v1.0.0 note below on why
+that file remains absent by design).
+
+- **`README.md`'s `fragile`/`screen` callout described `screen`'s three-way OR rule under `fragile`'s name**,
+  contradicting the correct `fragile` definition given nine lines above it in the field table -- the exact
+  conflation `fragility.py`'s own docstring already documents catching and fixing once, in the *source*, which
+  never propagated to this separately-maintained file. Rewritten to describe each field correctly, and to disclose
+  explicitly that neither `screen` nor `fragile` reproduces the accompanying paper's own published `Fragile` column
+  (a third, distinct rule with a `reversal` gate neither has): naively applying `screen` to the paper's own Table 1
+  flags 11 of 12 series where the paper's own rule flags 7 of 12, on identical data.
+- README.md Quick Start's own toy-example comment had its arithmetic backwards — it said the shock-prone model was
+  "better on average"; that model actually wins 9 of the 10 example years, but its one shock-year loss (2.60) makes
+  its pooled mean worse than the steady model's, which is why the steady model is the pooled winner in that
+  example. Comment corrected to describe what the numbers actually show. (Prose-only; not a function-level claim,
+  so no dedicated regression test applies here.)
+- **`EVALUATION_CARD.md` still said "this package is not yet released to Zenodo"**, contradicting `CITATION.cff`'s
+  already-correct, already-live DOI (`10.5281/zenodo.22652327`, confirmed 2026-09-08) — a one-fact-in-three-files
+  update that landed in `CITATION.cff` but not here at release time. Corrected.
+- **This file's own `## [1.0.0]` header still said "unreleased"** after the actual release. Corrected below.
+
+## [1.0.0] — 2026-09-08
 
 First public release, accompanying an unpublished companion paper (in journal review) applying the same
 diagnostic to real official-statistics forecasting panels.

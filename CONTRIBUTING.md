@@ -59,4 +59,4 @@ underlying issue (see "verify, don't assume" above), checking and reporting that
 
 ## Getting help
 
-This is currently a private repository. Once it's public, GitHub Issues will be the primary support channel.
+GitHub Issues is the primary support channel.

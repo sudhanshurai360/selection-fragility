@@ -55,6 +55,29 @@ class TestMDE:
         mde_full = minimum_detectable_edge(L)
         mde_close_only = minimum_detectable_edge({"champ": L["champ"], "close": L["close"]})
         np.testing.assert_allclose(mde_full, mde_close_only, rtol=0.05)
+    def test_binding_rival_stable_on_near_tied_rivals_across_weight_scale(self):
+        """FIXED 2026-09-09 (round-5 stress-review, champion_pattern_hunt lens): _binding_rival's
+        sorted-name tie-break previously only guarded an EXACT float tie of the distance-to-
+        champion, not a relative floor for NEAR-ties -- a uniform weight rescale (a documented
+        no-op for np.average's ratio) could flip which of two near-equally-close rivals was named
+        'binding', flipping significance_boundary and the headline `resolved` verdict. This function
+        was already the target of one confirmed order-dependence regression (see its own docstring)
+        but had no near-tie coverage, only the well-separated (1.05 vs 3.0) fixture above."""
+        L = {
+            "a": np.array([-0.4, -0.4, -0.4, -0.4]),
+            "y": np.array([0.0, 0.0, 2.0, 2.125]),
+            "z": np.array([0.0, 0.0, 0.0, 4.125]),
+        }
+        boundaries = []
+        for scale in (1e-9, 1e-6, 1e-3, 1.0, 1e3, 1e6, 1e9):
+            from selection_fragility.resolution import resolution_report
+            w = np.ones(4) * scale
+            r = resolution_report(L, w)
+            boundaries.append((r["binding_rival"], r["resolved"], r["significance_boundary"]))
+        rivals = {b[0] for b in boundaries}
+        resolved_flags = {b[1] for b in boundaries}
+        assert len(rivals) == 1, f"binding_rival flipped across weight scales: {boundaries}"
+        assert len(resolved_flags) == 1, f"resolved verdict flipped across weight scales: {boundaries}"
 # ---- S2.2: selection_regret (LOO) ---------------------------------------------------------------
 class TestSelectionRegret:
     def test_T2_degenerate_raises_or_flags(self, random_panel):
@@ -101,6 +124,23 @@ class TestSelectionRegret:
         r_uniform = selection_regret(L, weights=np.ones(T))
         r_skewed = selection_regret(L, weights=w_skewed)
         assert r_uniform != pytest.approx(r_skewed, rel=1e-6)
+    def test_w_keyword_alias_for_weights(self):
+        """FIXED 2026-09-10 (round-6 stress-review, api_consistency lens): every sibling function in
+        this module (minimum_detectable_edge, significance_boundary, mcb_bound, resolution_report)
+        names this parameter `w`; selection_regret alone named it `weights`, so a caller who learned
+        the `w=` convention from any sibling got a raw TypeError here. `weights` is kept as the
+        primary/positional name (it shipped in the published v1.0.0), `w` is an additive
+        keyword-only alias -- both must give the identical result, and passing both must raise."""
+        rng = np.random.default_rng(0)
+        T = 12
+        L = {"a": rng.normal(1.0, 0.3, T), "b": rng.normal(1.1, 0.3, T)}
+        w = np.linspace(0.5, 2.0, T)
+        r_positional = selection_regret(L, w)
+        r_weights_kw = selection_regret(L, weights=w)
+        r_w_kw = selection_regret(L, w=w)
+        assert r_positional == r_weights_kw == r_w_kw
+        with pytest.raises(TypeError, match=r"(?i)got both"):
+            selection_regret(L, weights=w, w=w)
     def test_golden_value_real_panel_quartile_monotone(self, real_cells, real_series_list):
         """Reconstructs the positioning reviewer's own measurement: predicted regret should be
         monotone non-decreasing across quartiles when cells are sorted by predicted regret (a
@@ -117,6 +157,34 @@ class TestSelectionRegret:
         assert q1 <= q2 <= q3   # trivially true by construction of percentiles; real check is:
         assert vals[0] <= vals[-1]   # monotone ordering exists and is non-degenerate
         assert vals[-1] > vals[0], "all cells have identical regret -- statistic is not discriminating"
+    def test_fold_champion_actually_routes_through_pooled_winner(self, monkeypatch):
+        """FIXED 2026-09-09 (round-5 stress-review, test_gap_hunt lens), TEST ITSELF CORRECTED
+        2026-09-09 (independent review of the fix): selection_regret's 2026-09-09 fix routes each
+        fold's champion through pooled_winner(). A first version of this test hand-built a near-tied
+        panel (two models tied at the same pooled mean, weight-rescaled to force float64-noise
+        disagreement) and cross-checked the reported regret against a reimplementation using
+        pooled_winner() per fold -- but independent review reverted the fix's routing to a raw,
+        un-floored min and this test STILL passed: at every fold where the raw and floored picks
+        actually disagreed, both candidate models happened to have byte-identical held-out-period
+        losses, so the champion's IDENTITY differed but the regret VALUE did not -- vacuous. This
+        version instead verifies the wiring directly: monkeypatch pooled_winner to a deliberately
+        wrong constant-champion rule and confirm selection_regret's reported value changes, proving
+        the fold-champion pick is genuinely read from pooled_winner()'s return value rather than
+        computed independently."""
+        L = {
+            "champ": np.array([1.0, 1.0, 1.0, 1.0, 1.0]),
+            "rival": np.array([2.0, 2.0, 2.0, 2.0, 2.0]),
+            "other": np.array([3.0, 3.0, 3.0, 3.0, 3.0]),
+        }
+        w = np.ones(5)
+        real = selection_regret(L, w)
+        import selection_fragility.resolution as resolution_mod
+        monkeypatch.setattr(resolution_mod, "pooled_winner", lambda Ld, wd: "other")
+        forced_wrong = selection_regret(L, w)
+        assert forced_wrong != pytest.approx(real), (
+            "selection_regret's fold-champion pick does not actually route through pooled_winner() "
+            "-- forcing a different champion had no effect on the reported regret"
+        )
 # ---- S2.3: MCB bound ------------------------------------------------------------------------------
 class TestMCBBound:
     def test_bound_is_positive(self, random_panel):
