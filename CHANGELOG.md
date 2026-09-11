@@ -5,6 +5,10 @@ All notable changes to `selection-fragility` are recorded here. Versions follow
 
 ## [1.0.3] — 2026-09-09
 
+**PUBLISHED 2026-09-10**: GitHub release live, Zenodo minted a new version DOI
+`10.5281/zenodo.22699905` (v1.0.0's own version DOI, `10.5281/zenodo.22652327`, remains separately
+resolvable). See `CITATION.cff` for the current citation metadata.
+
 ### Fixed — 2026-09-10, a structural audit finds a fifth instance, then closes the pattern for good
 
 Prompted by an external second opinion (an independent review of this whole remediation history),

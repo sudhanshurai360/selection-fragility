@@ -157,8 +157,11 @@ description of something that regressed. Removed here rather than left as a dead
 input-freezing/hashing story for the paper's own reproduction pipeline remains open work.
 
 Please cite both the accompanying paper and this software. The citation metadata, including the minted DOI,
-lives in **`CITATION.cff`**. A note on Zenodo's convention (the deposit is live as of 2026-09-08, DOI
-`10.5281/zenodo.22652327`, confirmed directly against the record rather than assumed): this repository's
+lives in **`CITATION.cff`** — check that file for the current version's DOI rather than a number restated here,
+which is exactly the kind of one-fact-in-multiple-files duplication that has already gone stale once before (see
+CHANGELOG.md's `[1.0.1]` entry). As of 2026-09-10, the live deposit is v1.0.3, DOI `10.5281/zenodo.22699905`
+(confirmed directly against the record rather than assumed; v1.0.0's own version DOI, `10.5281/zenodo.22652327`,
+remains separately resolvable). This repository's
 `.zenodo.json` does not exist, and none is needed for an already-minted deposit — `.zenodo.json` is deposit
 *input* metadata used to configure a deposit before it is made and never carries the minted DOI back, so
 `CITATION.cff` — not `.zenodo.json` — remains the file to check. When recording which snapshot produced a specific result, cite the **version** DOI rather than the

@@ -24,26 +24,15 @@ authors:
 # were still being found and fixed the day this comment was written). Same premature-fact risk the
 # DOI comment below already correctly avoids; omit until the actual release date is known, add it
 # then rather than guess or backdate.
-# ADDED 2026-09-08: the release happened -- GitHub release v1.0.0 published, Zenodo deposit
-# confirmed live at the DOI below (fetched directly, not assumed from the GitHub-Zenodo widget).
-# NOTE 2026-09-09, UPDATED same day: pyproject.toml/CHANGELOG.md/__init__.py went 1.0.0 -> 1.0.1
-# (commit 146d72b, doc-sync fixes, no code/behavior change) -> 1.0.2 (commits f1a0fae/f8a3fce, two
-# real pooled_winner-bypass bug fixes, split into their own CHANGELOG entry) -> 1.0.3 (round-5
-# stress-review: a third and fourth instance of the same bug class, resolution.py's _binding_rival
-# and fragility.py's pooled_runner_up, plus a report.py LEADERBOARD disambiguation fix; round-6
-# 10-lens pre-publish due-diligence review added 21 more fixes -- two real CLI bugs defeating
-# --exit-code's CI-gating contract, a resource-exhaustion gap, input-validation gaps, a false
-# performance-docs claim, and API-consistency/error-message cleanups -- accumulated into the SAME
-# 1.0.3, not a new bump, since 1.0.3 was never published either; round-7, the FINAL pre-publish
-# review before v1.0.3 actually ships, added 5 more fixes -- a silently-misread unpivoted-long-frame
-# gap in from_forecasts(), a CLI UnicodeEncodeError crash on non-Latin-1 model names, a ragged-array
-# error message, plus two stale-number touch-ups) -- this file is deliberately NOT
-# bumped yet. version/date-released/the DOI below describe the live v1.0.0
-# Zenodo deposit; they will be updated in a dedicated follow-up commit once a new GitHub release
-# actually mints its own Zenodo deposit, the same way this file's own 2026-09-08 update was done --
-# not guessed or bumped in advance.
-date-released: "2026-09-08"
-version: 1.0.0
+# ADDED 2026-09-08: v1.0.0 released -- GitHub release published, Zenodo deposit confirmed live at
+# the DOI below (fetched directly, not assumed from the GitHub-Zenodo widget).
+# UPDATED 2026-09-10: v1.0.3 released the same way -- real bug fixes across seven stress-review
+# rounds since v1.0.0 (see CHANGELOG.md for the complete, dated account of every fix), GitHub
+# release published, new Zenodo version DOI confirmed live below. This file now describes that
+# release, not v1.0.0 -- the same discipline as the 2026-09-08 update: only updated once the real
+# event happened, never guessed or bumped in advance.
+date-released: "2026-09-10"
+version: 1.0.3
 license: MIT
 repository-code: "https://github.com/sudhanshurai360/selection-fragility"
 keywords:
@@ -57,16 +46,18 @@ keywords:
   - official statistics
   - reproducibility
 
-# ADDED 2026-09-08: the version DOI below was read directly from the live Zenodo record
-# (zenodo.org/records/22652327), not copied from the GitHub-Zenodo integration widget or assumed.
-# That record does not yet surface a separate "concept DOI" (the one that always resolves to the
-# latest version) -- Zenodo generally only makes that distinction visible in the UI once a second
-# version exists. This is deliberately the VERSION-specific DOI, paired with version: 1.0.0 above;
-# revisit when a v1.1.0/v2.0.0 deposit exists and the concept DOI becomes unambiguous.
+# UPDATED 2026-09-10: the version DOI below was read directly from the live Zenodo record
+# (zenodo.org/records/22699905) for the v1.0.3 release, not copied from the GitHub-Zenodo
+# integration widget or assumed. v1.0.0's own version DOI (10.5281/zenodo.22652327) remains
+# separately resolvable and is recorded in CHANGELOG.md's [1.0.0] entry -- this field always
+# describes the CURRENT release's version-specific DOI, not a history of all of them. A second
+# version now exists, so Zenodo should also expose a "concept DOI" (the one that always resolves
+# to whichever version is latest) -- not yet independently confirmed here; check the live Zenodo
+# record if you need the concept DOI specifically rather than this version-pinned one.
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.22652327
-    description: "The version-specific DOI for v1.0.0, minted by Zenodo on GitHub release."
+    value: 10.5281/zenodo.22699905
+    description: "The version-specific DOI for v1.0.3, minted by Zenodo on GitHub release."
 
 # The accompanying paper is still unpublished (in journal review); no preferred-citation block
 # for it yet -- adding a title/author/year block here would make GitHub's own "Cite this
