@@ -57,9 +57,9 @@ See the package README table. Headline fields: `mcs` (surviving set), `k_star`, 
   | true edge | detected |
   |---|---|
   | 0% | 0.01 (see note: this panel HAS a best model, so this is correct identification) |
-  | 2% | **0.19** |
-  | 5% | **0.47** |
-  | 10% | **0.68** |
+  | 2% | **0.21** |
+  | 5% | **0.43** |
+  | 10% | **0.65** |
   | 30% | **0.78** |
   | 50% | **0.79** |
 
@@ -70,13 +70,13 @@ See the package README table. Headline fields: `mcs` (surviving set), `k_star`, 
   high-variance benchmark structurally uneliminable; the accompanying study documents the error and its
   correction. The corrected design leaves the panel uncentered. A separate false-discovery rate, measured on
   genuinely null i.i.d. panels where no model is better and averaged over 5 independent seeds (a single-seed
-  estimate at this budget can plausibly differ by roughly 2x -- an earlier single-seed figure of 0.007 undershot
-  this by about that much), is **0.0092** (0.0098 under the raw elimination rule).
+  estimate at this budget is volatile -- one ran as high as 0.0125), is **0.0096** (0.0102 under the raw
+  elimination rule).
 
   Read the small-edge rows with their arithmetic ceiling in mind: an edge handed to a model already well behind does
   not make it the best model, and no test could single it out. Restricted to trials where the planted edge actually
-  does make the focal model the pooled best, detection at a 10% edge is **0.89** rather than 0.68,
-  and at 2% it is **0.39** rather than 0.19. The remaining shortfall is the variance of shock years:
+  does make the focal model the pooled best, detection at a 10% edge is **0.85** rather than 0.65,
+  and at 2% it is **0.43** rather than 0.21. The remaining shortfall is the variance of shock years:
   a single 2020-sized cliff swamps a few-percent difference in mean accuracy.
 
   So a large tied set (`|MCS| > 1`) can reflect **low power** as much as a genuine tie. Report non-identification as
