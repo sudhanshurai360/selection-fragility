@@ -3,6 +3,56 @@
 All notable changes to `selection-fragility` are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
+## [1.0.4] — 2026-10-08 (PREPARED, NOT YET PUBLISHED)
+
+The three fields the accompanying paper's Supplement S12 flagged in v1.0.3, now addressed. ON RELEASE:
+mint the new Zenodo version DOI, then fill `date-released`, `version`, and the version DOI in `CITATION.cff`
+and the "live deposit" line in `EVALUATION_CARD.md` (per this project's rule: never guess a DOI/date in
+advance). Patch release — the one behavior change is a bug fix that brings a public field into line with the
+paper's own published rule.
+
+### Fixed
+
+- **`fragility()`'s `fragile` field no longer emits a "retired/inverted" warning.** v1.0.3 warned that the
+  `winner_stability < null_p05` verdict was "measured to be INVERTED … fires more under pure noise than against
+  a genuine strong winner" and steered callers to `report()`/`concentration_share`. That label was wrong:
+  firing *more* under noise than against a true winner is the CORRECT direction for a fragility detector, and
+  is exactly what the paper's Section 5.4 recipe is supposed to do. VERIFIED 2026-10-07 by simulation
+  (K=6, T=30, 400 trials/condition, n_boot=500): the flag fires **6.8%** under pure noise (near the nominal 5%,
+  slightly oversized — the same finite-sample oversizing the paper documents) and **0.0%** against a planted
+  strong winner. Even the warning's own cited numbers (10.7% noise vs 1.4% winner) were noise > winner, i.e.
+  the correct direction. The warning is removed; the computation is unchanged. The field's direction is now
+  locked by a standing fire-rate test (`tests/test_v1_0_4_fixes.py::test_fragile_fire_rate_is_correct_direction`).
+  `import warnings` dropped from `fragility.py` (its only use was this warning).
+
+- **`screen` now follows Table 1's fixed Fragile rule EXACTLY** (behavior change). The rule is
+  `winner_stability < 0.60` OR (a score-vs-plurality **reversal** TOGETHER WITH `k*/T < 0.25`). v1.0.3 applied
+  the `k*/T < 0.25` cut on its own, with no reversal conjunction, so it flagged strictly more cells than the
+  published rule. On the real curated panel this over-flagged four series (RSAFS, BOPGEXP, UNEMPLOY, PAYEMS):
+  they have `k*/T < 0.25` and stability ≥ 0.60 but no reversal, so Table 1 says Fragile = no and v1.0.4 now
+  agrees. `screen` is still documented as a cheap triage flag, not a calibrated verdict.
+
+- **`mcs()` now documents the oversized first-step (elimination) size** (Section 4.2): empirical rejection
+  ~0.265 (i.i.d.) / ~0.367 (AR(1), rho=0.25) at K=6, T=30, alpha=0.10 (~2.6× nominal), and ~0.179 / ~0.307 at
+  K=4, T=35. Because |MCS| is non-increasing in alpha, a non-identification count read off this test is a
+  LOWER BOUND. Documentation only; no behavior change.
+
+### Verified / tested
+
+- **12/12 reproduction re-confirmed against Table 1** on the frozen curated panel: `fragility()` reproduces the
+  winner and k* for all 12 series, `model_confidence_set()` reproduces |MCS| under BOTH elimination rules, and
+  (new) `screen` now equals Table 1's Fragile column for all 12. Added as a standing guard
+  (`test_curated_panel_reproduces_table1`).
+- **~50 new tests** in `tests/test_v1_0_4_fixes.py` proactively lock all three fixes (not just regression-on-find):
+  no-warning, fire-rate direction, `screen == Table 1 rule` on random panels, the real-data behavior change on
+  the four flip series, the first-step-size docstring, and the 12/12 reproduction (both elimination rules).
+- **Re-anchored one pre-existing stale test** (`test_stage4_pivot.py::test_recentred_null_benchmark_near_052`):
+  its expected ~0.518 reflected a transient PI SARIMA vintage not present in the frozen curated CSV, which gives
+  ~0.675. Confirmed the frozen CSV is the paper-consistent vintage (it reproduces all of Table 1) and that PI's
+  SARIMA is competitive (pooled loss 1.408, not a flat-forecast bug), so the band was re-anchored to the frozen
+  data. Unrelated to the three fixes above.
+- Full suite green after the changes: 606 passed, 1 xfailed.
+
 ## [1.0.3] — 2026-09-09
 
 **PUBLISHED 2026-09-10**: GitHub release live, Zenodo minted a new version DOI

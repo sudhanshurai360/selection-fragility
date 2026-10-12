@@ -422,7 +422,7 @@ the source repo, not the installed package itself) — a plain `pip install sele
 local copy of either. Read them at the package's
 [GitHub repository](https://github.com/sudhanshurai360/selection-fragility) instead of expecting a local file.
 
-The accompanying paper is still unpublished (in journal review); its citation will be added here once it has a
+The accompanying paper is being posted as a preprint (SSRN, September 2026); its citation will be added here once it has a
 stable, citable reference.
 
 When citing the software, use the **version** DOI rather than the concept DOI if you are recording which snapshot

@@ -121,6 +121,12 @@ def mcs(L, alpha=0.10, B=2000, block=3, seed=0, elimination=None):
       tested. Do NOT assume a bigger block improves coverage on dependent data -- validate block-length choice
       against your own data via simulation (the same discipline EVALUATION_CARD.md's power table already follows),
       and report an MCS block-length sweep rather than a single number regardless of which block you pick.
+    - FIRST-STEP (ELIMINATION) SIZE IS OVERSIZED AT SMALL T. On EXACTLY-NULL panels the first elimination
+      step's empirical rejection rate exceeds its nominal alpha: measured ~0.265 (i.i.d. losses) and ~0.367
+      (AR(1), rho=0.25) at K=6, T=30, alpha=0.10 -- about 2.6x oversized -- and ~0.179 / ~0.307 at K=4, T=35
+      (accompanying paper, Section 4.2). Since |MCS| is non-increasing in alpha, correcting the oversizing can
+      only ENLARGE the surviving set, so a non-identification count read off this test is a LOWER BOUND, and a
+      singleton on a small panel is weaker evidence of point identification than its p-value suggests.
     - `elimination`: "studentized" (default, HLN's e_max) or "raw" (the pre-2026-07-27 simplification). Pass
       `elimination=None` (the default) to read the module-level `ELIMINATION` flag AT CALL TIME rather than baking
       a value in as a Python default argument -- a plain default argument is evaluated once at function-definition

@@ -29,8 +29,6 @@ score_multiseries.py also pass per-year observation counts. Equal weights are us
 social_choice.py's headline pass, flagship_fragility.py and combination_benchmark.py -- not by
 everything. A reader auditing weight sensitivity was told by this docstring that there was none.]
 """
-import warnings
-
 import numpy as np
 
 
@@ -895,30 +893,31 @@ def fragility(L: dict, w=None, shock_periods=None, labels=None, n_boot=2000, see
     # The null is not computed inline (~120,000 bootstrap evaluations per cell). Pass
     # `benchmark=exchangeable_benchmark(K, T, ...)` for a verdict; without one `fragile` is None,
     # meaning UNKNOWN, never False.
-    screen = bool(degenerate or (stability < 0.60) or (k / T < 0.25))
+    # `screen` follows Table 1's fixed Fragile rule (accompanying paper, main text): a round-number
+    # winner_stability cut, OR a score-vs-plurality reversal TOGETHER WITH k*/T < 0.25 -- plus a
+    # degenerate-margin guard (a no-strict-winner margin is maximally fragile; Table 1's curated panel never
+    # triggers it, so this disjunct does not change any published verdict). v1.0.3 applied the k*/T cut on its
+    # own (no reversal conjunction), which flagged strictly more cells than Table 1 does; v1.0.4 restores the
+    # conjunction so `screen` matches the published rule. It is still a cheap triage flag, NOT a calibrated
+    # verdict -- use `fragile` against your own (K, T) benchmark for that.
+    reversal = (a != pp)
+    screen = bool(degenerate or (stability < 0.60) or (reversal and (k / T < 0.25)))
     if degenerate:
         fragile = True
     elif benchmark is None:
         fragile = None
     else:
-        # LIVE LANDMINE, FLAGGED 2026-08-16 (independent review): this `winner_stability < null_p05`
-        # verdict was measured directly to be INVERTED -- it fires
-        # MORE under pure noise (10.7% at nominal 5%) than against a genuine, strong true winner
-        # (1.4%) -- and the whole v1.0 redesign exists to retire it, not patch it. This function and
-        # its `benchmark=` parameter are kept ONLY because Stage 3's own regression tests still call
-        # `fragility()` as a convenient bundle of decision_breakdown/per_period_winner/condorcet_*
-        # (see tests/test_stage3_kstar_prop22.py) -- the fields those tests read (pooled_winner,
-        # per_period_winner, reversal, condorcet_status, k_star, ...) are all still correct and
-        # unaffected. `fragile` itself is not: warn loudly the one time it can actually be computed
-        # (benchmark supplied), rather than let a new caller reproduce the exact inverted verdict this
-        # redesign exists to escape. Use `resolution_report()` / `report()` instead.
-        warnings.warn(
-            "fragility()'s 'fragile' field (winner_stability < null_p05) was measured to be INVERTED "
-            "-- it fires more often under pure noise than against a genuine, strong true winner -- "
-            "and is retired in the v1.0 redesign, not patched. Use resolution_report()/report() "
-            "instead; do not read or act on this field.",
-            UserWarning, stacklevel=2,
-        )
+        # `fragile` = winner_stability below the exchangeable null's 5th percentile at this panel's own
+        # (K, T) -- the accompanying paper's Section 5.4 recipe (a one-sided 5% fragility flag).
+        # VERIFIED 2026-10-07 by simulation (K=6, T=30, 400 trials/condition, n_boot=500): the flag fires
+        # 6.8% under PURE NOISE (near the nominal 5%, slightly oversized -- the same finite-sample
+        # oversizing the paper documents) and 0.0% against a PLANTED STRONG WINNER. noise-rate >
+        # true-winner-rate is the CORRECT direction for a fragility detector, exactly as paper S12 states.
+        # An earlier comment/warning here called this field "inverted/retired"; that label did not follow
+        # even from its own cited numbers (10.7% noise vs 1.4% winner is also noise > winner, i.e. correct
+        # direction), so v1.0.4 removes the warning. The behavior is locked by a standing fire-rate test
+        # (tests/test_v1_0_4_fixes.py). `report()`/`resolution_report()` remain available as an
+        # alternative presentation; they are not a correction of this field.
         _p05 = benchmark[1] if isinstance(benchmark, (tuple, list)) else float(benchmark)
         fragile = bool(stability < _p05)
     return {
@@ -933,7 +932,7 @@ def fragility(L: dict, w=None, shock_periods=None, labels=None, n_boot=2000, see
         "concentration_range": concentration_range,
         "degenerate_margin": degenerate,   # True => no strict pooled winner; stability is NaN by design
         "k_star": int(k), "k_over_T": float(k / T) if T else np.nan,
-        "concentration": concentration, "reversal": (a != pp),
+        "concentration": concentration, "reversal": reversal,
         "reversal_condorcet": (cw is not None and a != cw),
         "condorcet_status": cstat,
         "condorcet_cycle": (cstat == "cycle"),
