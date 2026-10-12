@@ -3,13 +3,13 @@
 All notable changes to `selection-fragility` are recorded here. Versions follow
 [semantic versioning](https://semver.org/).
 
-## [1.0.4] — 2026-10-08 (PREPARED, NOT YET PUBLISHED)
+## [1.0.4] — 2026-10-12
 
-The three fields the accompanying paper's Supplement S12 flagged in v1.0.3, now addressed. ON RELEASE:
-mint the new Zenodo version DOI, then fill `date-released`, `version`, and the version DOI in `CITATION.cff`
-and the "live deposit" line in `EVALUATION_CARD.md` (per this project's rule: never guess a DOI/date in
-advance). Patch release — the one behavior change is a bug fix that brings a public field into line with the
-paper's own published rule.
+**PUBLISHED 2026-10-12**: GitHub release live, Zenodo minted the version DOI `10.5281/zenodo.23322466`
+(v1.0.3 was `10.5281/zenodo.22699905`; v1.0.0 was `10.5281/zenodo.22652327`). `CITATION.cff` and
+`EVALUATION_CARD.md` updated with the version, date, and DOI read directly from the live Zenodo record. The
+three fields the accompanying paper's Supplement S12 flagged in v1.0.3 are now addressed. Patch release — the
+one behavior change is a bug fix that brings a public field into line with the paper's own published rule.
 
 ### Fixed
 

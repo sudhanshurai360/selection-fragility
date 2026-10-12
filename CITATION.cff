@@ -31,8 +31,10 @@ authors:
 # release published, new Zenodo version DOI confirmed live below. This file now describes that
 # release, not v1.0.0 -- the same discipline as the 2026-09-08 update: only updated once the real
 # event happened, never guessed or bumped in advance.
-date-released: "2026-09-10"
-version: 1.0.3
+# UPDATED 2026-10-12: v1.0.4 released (GitHub release published, Zenodo minted the version DOI). The three
+# fields below were read directly from the live record (zenodo.org/doi/10.5281/zenodo.23322466), not guessed.
+date-released: "2026-10-12"
+version: 1.0.4
 license: MIT
 repository-code: "https://github.com/sudhanshurai360/selection-fragility"
 keywords:
@@ -56,8 +58,8 @@ keywords:
 # record if you need the concept DOI specifically rather than this version-pinned one.
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.22699905
-    description: "The version-specific DOI for v1.0.3, minted by Zenodo on GitHub release."
+    value: 10.5281/zenodo.23322466
+    description: "The version-specific DOI for v1.0.4, minted by Zenodo on the GitHub release (2026-10-12). v1.0.3 was 10.5281/zenodo.22699905; v1.0.0 was 10.5281/zenodo.22652327."
 
 # The accompanying paper is still unpublished (in journal review); no preferred-citation block
 # for it yet -- adding a title/author/year block here would make GitHub's own "Cite this
