@@ -377,8 +377,18 @@ Index lacks).
 
 ## Using from R
 
+A native R port, **[`selectionfragility`](https://github.com/sudhanshurai360/selectionfragility)**, is now
+available (GitHub for now; CRAN submission in progress). Function names and signatures are near-identical 1:1
+with this package, and the one-screen `report()` output is structured identically in both languages. Cite either
+implementation; they compute the same quantities. Two things do not carry over: there is no `from_forecasts()`
+equivalent yet, and bootstrap-based numbers (`winner_stability`, the MCS bootstrap p-value, `compare()`'s churn
+rate) are not bit-for-bit identical across languages — R's RNG and NumPy's RNG are different generators, so
+compare conclusions, not decimals. The R package's README and vignette document the full install/usage path;
+this section is kept for historical/fallback purposes (e.g. if you need this exact Python implementation called
+from an R pipeline rather than the native port).
+
 This is a Python package, but the Model Confidence Set literature it builds on (Hansen, Lunde & Nason) and its
-applied-econometrics audience skew heavily R. It's usable from R via `reticulate`; the return types are all
+applied-econometrics audience skew heavily R. It's also usable from R via `reticulate`; the return types are all
 R-safe with no special handling:
 
 ```r
@@ -410,9 +420,15 @@ survivor set — not because the algorithms disagree, but because the defaults d
 `alpha`/`B` explicitly and choose `block` to match whatever R's auto-selection picked for your data (there is no
 adaptive block-length option here; you supply it).
 
-**Disclosed gap**: this package's numeric agreement is currently cross-checked only against Python's
-`arch.bootstrap.MCS`, not against R's `MCS` package directly. Treat that as untested parity, not claimed parity,
-until a side-by-side run exists.
+**Disclosed gap, partially closed**: this package's numeric agreement was originally cross-checked only against
+Python's `arch.bootstrap.MCS`, not against R's `MCS` package directly. The `selectionfragility` R port's own
+audit has since established a transitive check: its native MCS implementation (`mcs()`) matches this package's
+algorithm line-for-line (verified on deterministic structural cases), and its `identify()`/`mcs_size()` path,
+which delegates to `MCS::MCSprocedure()`, was confirmed to use correctly-oriented data and the matching test
+statistic (`"TR"`, not `MCS::MCSprocedure()`'s own `"Tmax"` default — the two disagreed on 6% of simulated
+panels before that fix). That is evidence toward parity with R's `MCS` package, not a full direct side-by-side
+from this package itself — the remaining known difference is the circular vs. moving-block bootstrap (see the
+R package's `?mcs` docs), which can legitimately produce different p-values near a decision boundary.
 
 ## Citing
 
