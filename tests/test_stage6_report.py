@@ -381,15 +381,31 @@ class TestReportMcsDedup:
 def test_report_seed_parameter_threads_through_to_mcs_bootstrap():
     """REGRESSION (6-reviewer adversarial pass, 2026-11-17): report() previously had no `seed`
     parameter at all and silently always used seed=0 for its underlying MCS bootstrap -- added one
-    and threaded it to `_run_mcs()`/`resolution_report(mcs_seed=)`. This pins that the parameter is
-    live (accepted, no TypeError) and that explicit different seeds both produce a well-formed
-    report, not that the results must differ (they may legitimately agree)."""
+    and threaded it to `_run_mcs()`/`resolution_report(mcs_seed=)`. A first version of this test
+    only checked that report(seed=0)/report(seed=1) both ran without error -- which would pass
+    identically even if `seed` were accepted and silently discarded, so it pinned nothing. This
+    version spies on `identify._ArchMCS` (the actual point where `seed` reaches the bootstrap) to
+    confirm the caller's value is genuinely what gets there, not just a parameter that exists on
+    paper."""
+    from unittest import mock
+    import selection_fragility.identify as identify_mod
+
     L = {
-        "a": [1.00, 1.05, 0.95, 1.10, 0.90, 1.08, 0.92, 1.03, 0.97, 1.02],
-        "b": [1.01, 1.04, 0.96, 1.09, 0.91, 1.07, 0.93, 1.02, 0.98, 1.01],
+        "a": [1.00, 0.98, 1.02, 1.01, 0.99, 1.03, 0.97, 1.00, 1.02, 0.98],
+        "b": [1.01, 0.99, 1.03, 1.02, 1.00, 1.04, 0.98, 1.01, 1.03, 0.99],
     }
     panel = LossPanel.from_losses(L)
-    out_seed0 = report(panel, seed=0)
-    out_seed1 = report(panel, seed=1)
+    seen_seeds = []
+    real_arch_mcs = identify_mod._ArchMCS
+
+    def spy(*args, **kwargs):
+        seen_seeds.append(kwargs.get("seed"))
+        return real_arch_mcs(*args, **kwargs)
+
+    with mock.patch("selection_fragility.identify._ArchMCS", side_effect=spy):
+        out_seed0 = report(panel, seed=77)
+    # Both of the real MCS calls inside report() (VERDICT's _run_mcs() and RESOLUTION's
+    # resolution_report(mcs_seed=) -> identified() -> mcs_size() -> _run_mcs()) must receive the
+    # caller's seed, not a hardcoded 0.
+    assert seen_seeds == [77, 77]
     assert isinstance(out_seed0, str) and "VERDICT" in out_seed0
-    assert isinstance(out_seed1, str) and "VERDICT" in out_seed1

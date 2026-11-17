@@ -279,10 +279,9 @@ the rules), two concrete gaming vectors are real and confirmed, not hypothetical
   of seeds and reports only the favorable one can flip the headline verdict roughly 1 time in 3 (this engine) to
   1 time in 8 (the cross-check engine) with **no data manipulation at all**. `winner_stability()` is NOT exploitable
   this way (it stayed within 0.933–0.960 across the same seed sweep) — only the MCS/identification layer is.
-  `report()`'s one-screen summary has no `seed=` argument and is permanently pinned to `seed=0`, so an honest reader
-  of `report()` alone has no way to know how seed-sensitive that single verdict is; call `mcs()`/`identified()`
-  directly across a few seeds yourself near a borderline `alpha` if this matters for your use case, rather than
-  trusting one fixed-seed call.
+  `report()` has a `seed=` argument (default 0, matching its prior hardcoded behavior) precisely so a caller CAN
+  check this -- call `report(panel, seed=...)`/`mcs()`/`identified()` across a few different seeds yourself near a
+  borderline `alpha` if this matters for your use case, rather than trusting one fixed-seed call.
 
 One related concern that is only PARTIALLY handled: strategic period-withholding (submitting only "easy" periods to
 inflate an apparent record) is closed at the input layer for the ASYMMETRIC case — every entry point requires equal

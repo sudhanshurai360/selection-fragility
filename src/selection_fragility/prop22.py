@@ -63,6 +63,11 @@ def prop22_certifies(k, T, z=1.96) -> bool | None:
     if k <= 0 or k >= T:
         return None
     return bool(k <= _prop22_threshold(T, z=z))
+def _weights_are_uniform(w):
+    """Shared by certified_tied_subset() (below) and report()'s PIVOT section (report.py) -- both
+    call prop22_certifies() on a k* that is only valid when it came from UNWEIGHTED
+    breakdown_number()."""
+    return bool(np.allclose(w, w.flat[0] if hasattr(w, "flat") else w[0]))
 def certified_tied_subset(L, w=None, z=1.96):
     """A no-bootstrap LOWER BOUND on the tied set's size: the champion plus every rival whose pairwise
     k* is certified non-significant by Proposition 2.2 (§2.3). NOT a confidence set, and NOT nested in
@@ -85,7 +90,7 @@ def certified_tied_subset(L, w=None, z=1.96):
     L = _as_loss_dict(L)
     T = _validate_losses(L, w)
     w = np.ones(T) if w is None else np.asarray(w, float)
-    if not np.allclose(w, w.flat[0]):
+    if not _weights_are_uniform(w):
         raise ValueError(
             "certified_tied_subset() only supports uniform weights (or w=None) -- Proposition "
             "2.2's bound is proved for the unweighted i.i.d. population-sd statistic, and applying "

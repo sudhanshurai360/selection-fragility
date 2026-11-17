@@ -8,7 +8,7 @@ import numpy as np
 from .fragility import pooled_winner, decision_breakdown
 from .identify import _run_mcs
 from .resolution import resolution_report, mcb_bound
-from .prop22 import prop22_certifies
+from .prop22 import prop22_certifies, _weights_are_uniform
 from .pivot import concentration_share, pivot_agreement
 def _fmt_label(lbl):
     if hasattr(lbl, "strftime"):
@@ -276,13 +276,27 @@ def report(panel, alpha=0.10, full=False, seed=0):
             lines.append(f"  {period_txt} -- fragility read UNDETERMINED ({reason}); see "
                          f"VERDICT/RESOLUTION above before treating this as evidence either way")
         else:
-            cert = prop22_certifies(k, T=T)
-            if cert is True:
-                cert_txt = "certifies non-significance at the 5% level (Prop. 2.2, no simulation)"
-            elif cert is False:
-                cert_txt = "does not certify non-significance at the 5% level"
+            # FIXED 2026-11-17 (6-reviewer strict-verification pass, CONFIRMED CRITICAL):
+            # prop22_certifies() is only valid for a k* computed from an UNWEIGHTED
+            # breakdown_number() (see prop22.py's own scope note) -- but `k` here came from
+            # decision_breakdown(L, w, ...) using the panel's REAL, possibly non-uniform weights.
+            # Calling prop22_certifies(k, T) on that weighted k reproduces the exact "CONFIRMED
+            # CRITICAL" defect class certified_tied_subset() was fixed for in 2026-09-02 (a
+            # weighted panel can silently get a confident "certifies non-significance" line that
+            # is not actually certified once weighting is correctly excluded from the Prop 2.2
+            # statistic -- measured at 6.75% of simulated weighted panels). Skip the certificate
+            # entirely on a weighted panel, same sentinel wording as k<=0/k>=T ("no constraint"),
+            # rather than ever compute it.
+            if not _weights_are_uniform(w):
+                cert_txt = "no constraint from Proposition 2.2 (panel has non-uniform weights)"
             else:
-                cert_txt = "no constraint from Proposition 2.2 at this k*"
+                cert = prop22_certifies(k, T=T)
+                if cert is True:
+                    cert_txt = "certifies non-significance at the 5% level (Prop. 2.2, no simulation)"
+                elif cert is False:
+                    cert_txt = "does not certify non-significance at the 5% level"
+                else:
+                    cert_txt = "no constraint from Proposition 2.2 at this k*"
             lines.append(f"  {period_txt} -- {cert_txt}")
             cs = concentration_share(L, w)
             pa = pivot_agreement(L, w, seed=0)
