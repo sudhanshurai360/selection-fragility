@@ -536,6 +536,18 @@ class TestBreakdownNumberWeightValidation:
         with pytest.raises(ValueError, match=r"(?i)finite|nan"):
             breakdown_number(la, lb, np.ones(T))
 
+    def test_mismatched_length_raises_clean_message(self):
+        """REGRESSION (found by a cross-language parity audit, 2026-11-17): the weight-length
+        check was `_validate_weights(w, w.size)` -- a self-referential no-op that never actually
+        compared against len(la)/len(lb). NumPy's broadcasting already raises its own (cryptic)
+        error on a genuine mismatch rather than silently recycling (the R port's identical no-op
+        pattern was more dangerous there, since R's vector recycling IS silent), but the message
+        was needlessly unclear. Now checked explicitly with this package's own worded error."""
+        la = np.array([1.0, 1, 1, 1, 1, 1])
+        lb = np.array([0.9, 0.9, 0.9, 0.9, 0.9, 1.3])
+        with pytest.raises(ValueError, match=r"same length"):
+            breakdown_number(la, lb, np.array([1.0, 50.0]))
+
 
 class TestFragilityModuleWeightAndBlockValidation:
     """REGRESSION (independent ML-engineer review, 2026-08-26): pooled_winner/winner_stability

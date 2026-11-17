@@ -398,6 +398,19 @@ def breakdown_number(la, lb, w):
     # refusing. panel._validate_weights already carried the right rules and messages; the only
     # defect was that this entry point did not call it.
     w = np.asarray(w, dtype=float)
+    la, lb = np.asarray(la, float), np.asarray(lb, float)
+    # FOUND BY CROSS-LANGUAGE PARITY AUDIT: `_validate_weights(w, w.size)` below checks w against
+    # its OWN size -- a self-referential no-op that never actually compares against len(la)/len(lb).
+    # NumPy's broadcasting raises its own (confusing, "operands could not be broadcast together")
+    # error on a genuine length mismatch rather than silently recycling (unlike the R port, where
+    # this same no-op pattern let R's vector recycling silently activate), so this was never a
+    # silent-wrong-answer bug here -- but the error message was still needlessly cryptic. Check
+    # explicitly first so a length mismatch gets this package's own clear, worded message.
+    if not (la.size == lb.size and la.size == w.size):
+        raise ValueError(
+            f"breakdown_number(): la, lb, and w must all have the same length (one entry per "
+            f"period); got len(la)={la.size}, len(lb)={lb.size}, len(w)={w.size}."
+        )
     # DEFERRED IMPORT (2026-08-25): panel.py imports _MAX_ABS_LOSS from THIS module, so a
     # module-level "from .panel import _validate_weights" here creates a circular import the
     # moment panel.py is upgraded past its current stub. Deferring it to the one call site
