@@ -216,6 +216,15 @@ documented inline in `report()`'s own docstring.
 
 ## Honest reporting (recommended)
 
+- **`resolution_report`/`minimum_detectable_edge`/`significance_boundary`/`mcb_bound` assume i.i.d.
+  loss differentials, with no autocorrelation correction.** Autocorrelated forecast losses are the
+  normal case in time series (e.g. from rolling-origin CV), not an edge case. Under positive
+  autocorrelation the standard error these functions compute is too small, so a `resolution_report`
+  call can print **"resolved" when it should not be** — exactly when a close, persistent edge
+  matters most. `mcs`/`model_confidence_set`'s own identification call already uses a block
+  bootstrap and does not have this problem; it is specifically the resolution/power layer's SE that
+  is unprotected. Before trusting a close "resolved" call on your own data, check the
+  autocorrelation of the loss differential yourself (e.g. `statsmodels.tsa.stattools.acf`).
 - **Low power — and not only at small T.** Under the **default** `elimination="studentized"` rule (Hansen–Lunde–Nason's
   published rule, what this package uses unless you say otherwise), the equal-predictive-ability test detected true
   edges of 2%, 5% and 10% at rates of **0.21**, **0.43** and **0.65**, and a 30% edge 78% of the
@@ -270,9 +279,8 @@ the rules), two concrete gaming vectors are real and confirmed, not hypothetical
   the pooled winner and k\* entirely — this is correct arithmetic, not a defect, but it means **weights must always
   be operator-controlled and fixed before results are known, never participant-chosen**, in any setting with an
   adversarial party.
-- **Seed-shopping on a borderline panel is at least as exploitable as the two vectors above** (ADDED 2026-11-17,
-  found during the R port's 6-reviewer adversarial pass, confirmed here too since `mcs()`'s algorithm is identical
-  across languages). Quantified on a genuinely borderline K=2, T=20 panel sitting near the `alpha=0.10` boundary,
+- **Seed-shopping on a borderline panel is at least as exploitable as the two vectors above.**
+  Quantified on a genuinely borderline K=2, T=20 panel sitting near the `alpha=0.10` boundary,
   sweeping `seed=1..300` with every other argument at its default: `mcs()` called the comparison "identified"
   (singleton MCS) on 37.3% of seeds at `B=2000` (42.0% at `B=500`) and "not identified" on the rest; the independent
   cross-check path (`arch.bootstrap.MCS`) called it "identified" on only 13.0% of seeds. A party who tries a handful
