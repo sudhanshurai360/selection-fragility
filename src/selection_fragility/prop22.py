@@ -37,6 +37,20 @@ def prop22_certifies(k, T, z=1.96) -> bool | None:
     False means k exceeds the threshold -- the bound does not certify non-significance here, which is
     NOT the same as certifying significance (a real t-test or the MCS answers that question).
 
+    SCOPE, NOT ENFORCED HERE (ADDED 2026-11-17, 6-reviewer convergence pass): this function takes a
+    bare `k`/`T`, with no visibility into how `k` was computed, so it CANNOT itself check the two
+    preconditions below -- the caller must. (1) `k` must come from an UNWEIGHTED `breakdown_number()`
+    call (see `certified_tied_subset()`'s own docstring/guard for the CONFIRMED CRITICAL bug this
+    produces when violated: a genuinely significant gap silently certified "non-significant"). Feeding
+    this function a `k` computed from a weighted `decision_breakdown()`/`breakdown_number()` call
+    reproduces that exact defect outside the one call site (`certified_tied_subset()`) that already
+    guards against it. (2) This certifies the SINGLE binding rival named by k*'s definition (min over
+    rivals), not an adaptively re-searched one -- if your workflow re-runs `decision_breakdown()` with
+    different weight vectors (or any other knob) until a favorable rival turns up, that is a multiple-
+    comparisons problem this certificate does not correct for (contrast `mcb_bound()` in resolution.py,
+    which DOES Bonferroni-correct for an analogous post-hoc rival-selection problem). A pre-specified
+    binding rival from a single, honest call needs no such correction; an adaptively-searched one does.
+
     Raises ValueError for NaN/non-finite k, T, or z. FIXED 2026-09-02 (10-agent code-review pass):
     this function previously performed zero input validation, unlike every other public function
     in this package (alpha, power, weights, K vs T, ... are all explicitly validated elsewhere).

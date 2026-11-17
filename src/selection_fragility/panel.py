@@ -179,7 +179,14 @@ def _check_K_vs_T(K, T):
             f"to a candidate shortlist first. NOTE: this warning is keyed on K only -- report()'s "
             f"PIVOT section can also get expensive at large T once a panel resolves, even at a "
             f"modest K well under this threshold; see README.md's 'A note on cost' for measured "
-            f"numbers.",
+            f"numbers. THIS IS ONLY A WARNING, NOT A HARD CAP (ADDED 2026-11-17, 6-reviewer "
+            f"adversarial pass): neither K nor T has an enforced ceiling anywhere in this package "
+            f"(unlike B, which does -- see mcs.py's _MAX_BOOTSTRAP_B). Measured growth in K is "
+            f"super-quadratic. If this package is ever called from a server/API process on "
+            f"untrusted caller-supplied K/T/B, that caller can trivially turn a single call into a "
+            f"minutes-to-hours-long computation with nothing stronger than this warning to stop "
+            f"them -- validate/cap K and T yourself at your own service boundary if that's your "
+            f"deployment shape.",
             UserWarning, stacklevel=3,
         )
 

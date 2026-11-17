@@ -270,11 +270,27 @@ the rules), two concrete gaming vectors are real and confirmed, not hypothetical
   the pooled winner and k\* entirely — this is correct arithmetic, not a defect, but it means **weights must always
   be operator-controlled and fixed before results are known, never participant-chosen**, in any setting with an
   adversarial party.
+- **Seed-shopping on a borderline panel is at least as exploitable as the two vectors above** (ADDED 2026-11-17,
+  found during the R port's 6-reviewer adversarial pass, confirmed here too since `mcs()`'s algorithm is identical
+  across languages). Quantified on a genuinely borderline K=2, T=20 panel sitting near the `alpha=0.10` boundary,
+  sweeping `seed=1..300` with every other argument at its default: `mcs()` called the comparison "identified"
+  (singleton MCS) on 37.3% of seeds at `B=2000` (42.0% at `B=500`) and "not identified" on the rest; the independent
+  cross-check path (`arch.bootstrap.MCS`) called it "identified" on only 13.0% of seeds. A party who tries a handful
+  of seeds and reports only the favorable one can flip the headline verdict roughly 1 time in 3 (this engine) to
+  1 time in 8 (the cross-check engine) with **no data manipulation at all**. `winner_stability()` is NOT exploitable
+  this way (it stayed within 0.933–0.960 across the same seed sweep) — only the MCS/identification layer is.
+  `report()`'s one-screen summary has no `seed=` argument and is permanently pinned to `seed=0`, so an honest reader
+  of `report()` alone has no way to know how seed-sensitive that single verdict is; call `mcs()`/`identified()`
+  directly across a few seeds yourself near a borderline `alpha` if this matters for your use case, rather than
+  trusting one fixed-seed call.
 
-One related concern that is already handled: strategic period-withholding (submitting only "easy" periods to
-inflate an apparent record) is closed at the input layer — every entry point requires equal period counts across
-all models being compared and raises a clear error otherwise, so there's no way to shrink your own effective sample
-size without also being excluded from the comparison.
+One related concern that is only PARTIALLY handled: strategic period-withholding (submitting only "easy" periods to
+inflate an apparent record) is closed at the input layer for the ASYMMETRIC case — every entry point requires equal
+period counts across all models being compared and raises a clear error otherwise, so there's no way for one
+participant to quietly submit a shorter record than the others. It does **not** and cannot close the SYMMETRIC
+case — every model handed the exact same curated/cherry-picked subset of periods looks identical to honest data
+from inside any loss-matrix-consuming tool. That is an inherent limitation of any diagnostic at this level, not a
+gap specific to this package.
 
 ## Pooled results can mask hidden heterogeneity
 

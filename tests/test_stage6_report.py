@@ -376,3 +376,20 @@ class TestReportMcsDedup:
             f"computation ({unit_cost:.3f}s) -- looks like the dedup regressed back toward "
             f"recomputing the same MCS multiple times."
         )
+
+
+def test_report_seed_parameter_threads_through_to_mcs_bootstrap():
+    """REGRESSION (6-reviewer adversarial pass, 2026-11-17): report() previously had no `seed`
+    parameter at all and silently always used seed=0 for its underlying MCS bootstrap -- added one
+    and threaded it to `_run_mcs()`/`resolution_report(mcs_seed=)`. This pins that the parameter is
+    live (accepted, no TypeError) and that explicit different seeds both produce a well-formed
+    report, not that the results must differ (they may legitimately agree)."""
+    L = {
+        "a": [1.00, 1.05, 0.95, 1.10, 0.90, 1.08, 0.92, 1.03, 0.97, 1.02],
+        "b": [1.01, 1.04, 0.96, 1.09, 0.91, 1.07, 0.93, 1.02, 0.98, 1.01],
+    }
+    panel = LossPanel.from_losses(L)
+    out_seed0 = report(panel, seed=0)
+    out_seed1 = report(panel, seed=1)
+    assert isinstance(out_seed0, str) and "VERDICT" in out_seed0
+    assert isinstance(out_seed1, str) and "VERDICT" in out_seed1

@@ -127,6 +127,19 @@ def _weighted_se(diff, w):
     # False -- a plausible-looking verdict built on undefined arithmetic. These public functions are
     # callable directly on a raw dict without going through LossPanel's own T>=2 check, so this must
     # be enforced here too, matching identify.py's independent validation for the same reason.
+    # I.I.D. ASSUMPTION, NOT HAC-CORRECTED (ADDED 2026-11-17, 6-reviewer convergence pass): this
+    # estimates Var(weighted mean) = sigma^2/n_eff under an implicit assumption that successive
+    # per-period (rival - champion) differentials are uncorrelated. Forecast loss differentials are
+    # canonically autocorrelated in practice (the reason Diebold-Mariano's own test uses a HAC/
+    # long-run-variance estimator, and the reason this package's OWN mcs()/model_confidence_set()
+    # runs a block bootstrap rather than an i.i.d. variance formula). Under positive autocorrelation
+    # (the common real-world case), this SE understates the true uncertainty, so
+    # minimum_detectable_edge()/significance_boundary()/mcb_bound()/resolution_report() can report
+    # more confidence (a smaller MDE, a "resolved" read) than the data actually supports. No HAC/
+    # Newey-West correction is implemented here; if autocorrelation is a live concern for your
+    # panel, prefer mcs()/model_confidence_set()'s block-bootstrap-based identification over this
+    # module's closed-form significance reads, or inspect the ACF of `diff` yourself before trusting
+    # a "resolved" verdict.
     T = len(diff)
     if T < 2:
         raise ValueError(f"need at least 2 periods to estimate a standard error; got T={T}.")
@@ -244,7 +257,10 @@ def minimum_detectable_edge(L, w=None, power=0.80, alpha=0.05):
     fully exact planning quantity requires the noncentral t-distribution's inverse; this t-quantile
     sum is the widely-used applied approximation to it, exact only in the normal/known-variance
     limit as T grows -- consistent with how this module already documents MDE as an approximation,
-    not a promise of exactness)."""
+    not a promise of exactness).
+
+    ASSUMES NO AUTOCORRELATION in the per-period (rival - champion) differential -- see
+    `_weighted_se`'s docstring for why this can matter and what to do instead when it does."""
     _validate_one_sided(alpha, power)
     L, w = _unwrap_panel(L, w)
     L = _as_loss_dict(L)
@@ -281,7 +297,10 @@ def significance_boundary(L, w=None, alpha=0.05):
     the same fix already applied to `minimum_detectable_edge` above (see its docstring for the T=2
     repro). This one is exact, not an approximation: a boundary built from an ESTIMATED variance is
     precisely the one-sample/paired t-test's own critical value, no noncentral-distribution
-    approximation involved."""
+    approximation involved.
+
+    ASSUMES NO AUTOCORRELATION in the per-period (rival - champion) differential -- see
+    `_weighted_se`'s docstring for why this can matter and what to do instead when it does."""
     _validate_one_sided(alpha)
     L, w = _unwrap_panel(L, w)
     L = _as_loss_dict(L)
@@ -331,7 +350,10 @@ def mcb_bound(L, w=None, alpha=0.05):
     is the global minimum by definition. The current coverage numbers are gated, not stated here --
     see tests/test_stage2_resolution.py::test_matched_coverage_across_tied_rival_counts for the
     verified figures; a number in this docstring would drift the next time this formula changes and
-    nothing would catch it."""
+    nothing would catch it.
+
+    ASSUMES NO AUTOCORRELATION in the per-period (rival - champion) differential -- see
+    `_weighted_se`'s docstring for why this can matter and what to do instead when it does."""
     _validate_one_sided(alpha)
     L, w = _unwrap_panel(L, w)
     L = _as_loss_dict(L)
@@ -409,7 +431,7 @@ def selection_regret(L, weights=None, *, w=None):
     return float(np.average(regrets, weights=w))
 
 
-def resolution_report(L, w=None, alpha=0.05, power=0.80, mcs_alpha=0.10):
+def resolution_report(L, w=None, alpha=0.05, power=0.80, mcs_alpha=0.10, mcs_seed=0):
     """R1/R2 refusal rules: a resolution-dependent read must refuse rather than print a
     confidently-looking number when the data cannot support it.
 
@@ -432,6 +454,19 @@ def resolution_report(L, w=None, alpha=0.05, power=0.80, mcs_alpha=0.10):
     accepted, so passing the same `LossPanel` already built for `report()` raised a confusing
     internal `TypeError: object of type 'LossPanel' has no len()` from deep inside
     `_validate_losses` instead of working directly or failing with a clear top-level message.
+
+    `resolved`/`mde`/`significance_boundary` ASSUME NO AUTOCORRELATION in the per-period loss
+    differential -- see `_weighted_se`'s docstring. `fragility_read`'s `identified` check does not
+    share this assumption (it goes through the block-bootstrap MCS), but the R1 `resolved` gate
+    does; a "resolved" read can overstate confidence under autocorrelated losses.
+
+    `mcs_seed` ADDED 2026-11-17 (6-reviewer adversarial pass): `fragility_read`'s `identified` check
+    is a bootstrap-based MCS call, and on a genuinely borderline panel the identified/not-identified
+    verdict can be seed-sensitive (see `mcs.py`'s "Adversarial use" README section for a quantified
+    example: a ~37-42 percentage-point swing across seed=1..300 on one borderline panel). Previously
+    this was silently pinned to seed=0 with no way for a caller to know how seed-sensitive their
+    result was; `mcs_seed` now lets you check multiple seeds explicitly rather than trusting one
+    fixed-seed call.
     """
     from .identify import identified as _identified
 
@@ -469,7 +504,7 @@ def resolution_report(L, w=None, alpha=0.05, power=0.80, mcs_alpha=0.10):
     # since it doesn't have them in scope), this can preserve the REAL already-computed values above
     # -- only is_identified/fragility_read actually depend on the failing MCS call.
     try:
-        is_identified = bool(_identified(L, alpha=mcs_alpha, w=ww))
+        is_identified = bool(_identified(L, alpha=mcs_alpha, w=ww, seed=mcs_seed))
     except ValueError:
         is_identified = None
         fragility_read = "undetermined"

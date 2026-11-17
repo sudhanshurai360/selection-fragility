@@ -57,7 +57,7 @@ def _strict_win_counts(L):
     unique_min = is_min & (is_min.sum(axis=0) == 1)
     wins = unique_min.sum(axis=1)
     return {models[i]: int(wins[i]) for i in range(len(models))}
-def report(panel, alpha=0.10, full=False):
+def report(panel, alpha=0.10, full=False, seed=0):
     """One-screen summary of a LossPanel: VERDICT (identification), LEADERBOARD (mean loss / in-MCS /
     periods won), RESOLUTION (observed edge vs MDE, MCB bound), PIVOT (k*, named periods or largest
     contributor, concentration_share, pivot_agreement). `full=True` is accepted for forward
@@ -89,7 +89,14 @@ def report(panel, alpha=0.10, full=False):
     precisely the regime a user hits once they have enough data for a real answer, the opposite of
     when the docs promised safety. The K-only cost claim above remains accurate for its own
     benchmark (a panel NOT yet resolved, or with no decisive pair); it is not a bound on cost for a
-    resolved panel at large T."""
+    resolved panel at large T.
+
+    `seed` ADDED 2026-11-17 (6-reviewer adversarial pass): VERDICT/`fragility_read` run a
+    bootstrap-based MCS, and this was previously silently pinned to seed=0 with no way for a
+    caller to know how seed-sensitive their one-screen verdict was on a borderline panel (see
+    `mcs.py`'s README "Adversarial use" section for a quantified example: identification can swing
+    ~37-42 percentage points across seed=1..300 on one borderline panel). Pass a few different
+    seeds yourself near a borderline alpha if this matters for your use case."""
     # FIXED 2026-09-02 (10-agent code-review pass, CONFIRMED GAP): report() used to access
     # panel.losses/.labels directly with no type check, so a raw dict (the Core API's fragility()/
     # model_confidence_set() input shape, and what examples/quickstart.py itself teaches) raised a
@@ -131,7 +138,7 @@ def report(panel, alpha=0.10, full=False):
     # verified byte-identical output on report()'s own existing golden-value test before/after.
     mcs_error = None
     try:
-        m = _run_mcs(L, alpha=alpha, w=w)
+        m = _run_mcs(L, alpha=alpha, w=w, seed=seed)
         survivors = set(m.included)
         msize = len(survivors)
         ident = bool(msize == 1)
@@ -149,7 +156,7 @@ def report(panel, alpha=0.10, full=False):
     # CAN disagree. Computing `res` first lets VERDICT carry an inline pointer to RESOLUTION instead
     # of silently relying on the reader to keep scrolling.
     try:
-        res = resolution_report(L, w, alpha=0.05, power=0.80, mcs_alpha=alpha)
+        res = resolution_report(L, w, alpha=0.05, power=0.80, mcs_alpha=alpha, mcs_seed=seed)
     except ValueError:
         # Same non-uniform-weight MCS refusal, reached here via R2's `_identified(..., w=ww)` call
         # inside resolution_report() -- `resolved`/`observed_edge`/`mde` don't themselves need MCS,
