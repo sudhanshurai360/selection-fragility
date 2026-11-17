@@ -648,6 +648,14 @@ def exchangeable_benchmark(K, T, n_rep=200, n_boot=500, block=None, seed=0, circ
     wrong for K > 2: the statistic does not go to 1/K under the null, it goes to roughly 0.52 at K=6,
     T=30. A threshold or a median is only interpretable against this benchmark, and the benchmark is
     cheap enough to compute that asserting one instead is indefensible.
+
+    ASSUMPTION (i.i.d. null): the simulated null panels are drawn independently across periods. Under
+    positive autocorrelation -- the normal case for forecast-loss series -- the true null
+    winner_stability distribution shifts UPWARD (e.g. at AR(1)=0.8 the null p05 is ~0.51 vs the i.i.d.
+    ~0.42), so comparing an observed stability against this i.i.d. benchmark's p05 will UNDER-detect
+    fragility on a persistent panel (it calls a genuinely-fragile winner "not fragile"). Treat a
+    "not fragile relative to this benchmark" verdict with caution when your loss differentials are
+    autocorrelated; check their ACF, or build a null matching your panel's own serial dependence.
     """
     w = np.ones(T)
     out = []
